@@ -16,10 +16,23 @@ class LabelParser {
 
         foreach ($lines as $line) {
 
-            // Brand (very naive rule: contains DISTILLERY)
-            if (strpos($line, "DISTILLERY") !== false) {
-                $result["brand"] = $line;
+            $brandCandidates = [];
+
+            foreach ($lines as $line) {
+
+                if (
+                    strlen($line) > 3 &&
+                    preg_match('/[A-Z]/', $line) &&
+                    !preg_match('/\d/', $line) &&
+                    !str_contains($line, 'WARNING') &&
+                    !str_contains($line, 'IMPORTS') &&
+                    !str_contains($line, 'PRODUCED')
+                ) {
+                    $brandCandidates[] = $line;
+                }
             }
+
+            $result["brand"] = $brandCandidates[0] ?? null;
 
             // ABV
             if (preg_match('/(\d{1,2})\s*%/', $line, $m)) {
@@ -27,8 +40,8 @@ class LabelParser {
             }
 
             // Class/type (whisky/rye/etc heuristic)
-            if (strpos($line, "WHISKY") !== false || strpos($line, "WHISKEY") !== false) {
-                $result["class"] = $line;
+            if (preg_match('/(WHISK(E)?Y|RUM|VODKA|GIN|TEQUILA|COGNAC)/', $line, $m)) {
+                $result["class"] = trim($line);
             }
 
             // Net contents
