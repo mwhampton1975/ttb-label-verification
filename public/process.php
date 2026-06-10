@@ -22,6 +22,8 @@ move_uploaded_file($tmpName, $targetPath);
 */
 $cmd = "tesseract " . escapeshellarg($targetPath) . " stdout 2>&1";
 
+$output = shell_exec($cmd);
+
 require_once __DIR__ . "/../src/LabelParser.php";
 
 $parser = new LabelParser();
