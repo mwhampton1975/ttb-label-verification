@@ -22,7 +22,10 @@ move_uploaded_file($tmpName, $targetPath);
 */
 $cmd = "tesseract " . escapeshellarg($targetPath) . " stdout 2>&1";
 
-$output = shell_exec($cmd);
+require_once __DIR__ . "/../src/LabelParser.php";
+
+$parser = new LabelParser();
+$parsed = $parser->parse($output);
 
 ?>
 
@@ -36,7 +39,7 @@ $output = shell_exec($cmd);
 <h2>OCR Output</h2>
 
 <pre>
-<?php echo htmlspecialchars($output); ?>
+<?php print_r($parsed); ?>
 </pre>
 
 <br>
