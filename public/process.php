@@ -41,7 +41,12 @@ $parsed = $parser->parse($output);
 <h2>OCR Output</h2>
 
 <pre>
+    Debug output:<br>
 <?php print_r($parsed); ?>
+</pre>
+
+<pre>
+<?php echo $output; ?>
 </pre>
 
 <br>
