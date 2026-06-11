@@ -227,7 +227,10 @@ class LabelParser {
         $result["needs_review"] = $classResult["needs_review"] ?? false;
         $result["flags"] = $classResult["flags"] ?? [];
 
-        $warningResult = $this->detectWarningDetailed($cleanLines);
+        $warningLines = array_values(array_filter($lines, function ($line) {
+            return trim($line) !== '';
+        }));
+        $warningResult = $this->detectWarningDetailed($warningLines);
         $result["warning_found"] = $warningResult["found"];
         $result["warning_exact_found"] = $warningResult["exact_found"];
         $result["warning_partial_found"] = $warningResult["partial_found"];
@@ -658,6 +661,7 @@ class LabelParser {
                 'confidence' => 100,
                 'matched_fragments' => ['FULL_WARNING_EXACT_MATCH'],
                 'matched_text' => $exactWarningResult['matched_text'],
+                'debug_warning' => $resultDebug,
                 'flag' => null,
             ];
         }
