@@ -1,4 +1,7 @@
 <?php
+$config = file_exists(__DIR__ . '/../config/local.php')
+    ? require __DIR__ . '/../config/local.php'
+    : [];
 
 class LlmAdjudicator
 {
@@ -7,7 +10,9 @@ class LlmAdjudicator
 
     public function __construct(?string $apiKey = null, string $model = 'gpt-5.5')
     {
-        $this->apiKey = $apiKey ?? getenv('OPENAI_API_KEY');
+        $this->apiKey = $apiKey
+            ?? getenv('OPENAI_API_KEY')
+            ?: ($config['openai_api_key'] ?? null);
         $this->model = $model;
     }
 
