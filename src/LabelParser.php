@@ -196,18 +196,31 @@ class LabelParser {
         ];
 
         $lines = array_map('trim', explode("\n", strtoupper((string) $text)));
+        $brandSearchLines = array_values(array_filter($lines, function ($line) {
+            return trim($line) !== '';
+        }));
 
         // STEP 1: normalize + filter junk lines
         $cleanLines = $this->filterNoise($lines);
         $cleanLines = array_map([$this, 'normalizeOcrLine'], $cleanLines);
         $cleanLines = $this->mergeLabelLines($cleanLines);
 
-        $brandResult = $this->extractBrand($cleanLines);
-
+        $expectedBrand = $expected['brand'] ?? null;
         $expectedBrandResult = $this->findExpectedBrand(
             $expected['brand'] ?? null,
-            $cleanLines
+            $brandSearchLines
         );
+
+        if (!empty($expectedBrand)) {
+            $brandResult = [
+                'value' => $expectedBrandResult['found']
+                    ? $expectedBrandResult['matched_text']
+                    : null,
+                'confidence' => $expectedBrandResult['confidence'],
+            ];
+        } else {
+            $brandResult = $this->extractBrand($cleanLines);
+        }
         $result["expected_brand_found"] = $expectedBrandResult["found"];
         $result["expected_brand_confidence"] = $expectedBrandResult["confidence"];
         $result["expected_brand_match_type"] = $expectedBrandResult["match_type"];
@@ -1008,7 +1021,8 @@ class LabelParser {
         return $flags;
     }
 
-    private function findExpectedBrand(?string $expectedBrand, array $lines): array {
+    private function findExpectedBrand(?string $expectedBrand, array $lines): array
+    {
         if (!$expectedBrand || trim($expectedBrand) === '') {
             return [
                 'found' => null,
@@ -1037,11 +1051,22 @@ class LabelParser {
             'matched_text' => null,
         ];
 
-        $searchWindows = $this->buildSearchWindows($lines);
+        /*
+        * Build search windows from raw-ish OCR lines.
+        * This allows:
+        *
+        * 12345
+        * IMPORTS
+        *
+        * to match expected brand "12345 IMPORTS".
+        */
+        $searchWindows = $this->buildBrandSearchWindows($lines);
 
         foreach ($searchWindows as $window) {
             $candidateRaw = $window['text'];
-            $candidateNormalized = $this->normalizeComparableText($candidateRaw);
+            $candidateNormalized = $this->normalizeComparableText(
+                $this->normalizeOcrLine($candidateRaw)
+            );
 
             if ($candidateNormalized === '') {
                 continue;
@@ -1052,16 +1077,19 @@ class LabelParser {
                 return [
                     'found' => true,
                     'confidence' => 100,
-                    'match_type' => 'exact_normalized',
+                    'match_type' => $window['line_count'] > 1
+                        ? 'exact_normalized_across_lines'
+                        : 'exact_normalized',
                     'matched_text' => $candidateRaw,
                 ];
             }
 
-            // 2. Expected brand appears inside a longer OCR line.
+            // 2. Expected brand appears inside a longer OCR window.
             if (str_contains($candidateNormalized, $expectedNormalized)) {
                 $score = 95;
 
-                // Slightly reduce confidence if line is very long, because it may be legal copy.
+                // Reduce confidence if the window is much longer than the expected brand.
+                // This prevents legal/address copy from being treated as a clean brand match.
                 if (strlen($candidateNormalized) > strlen($expectedNormalized) + 40) {
                     $score -= 10;
                 }
@@ -1070,7 +1098,9 @@ class LabelParser {
                     $best = [
                         'found' => true,
                         'confidence' => $score,
-                        'match_type' => 'contained_in_line',
+                        'match_type' => $window['line_count'] > 1
+                            ? 'contained_across_lines'
+                            : 'contained_in_line',
                         'matched_text' => $candidateRaw,
                     ];
                 }
@@ -1085,28 +1115,32 @@ class LabelParser {
                 $best = [
                     'found' => true,
                     'confidence' => $tokenScore,
-                    'match_type' => 'token_match',
+                    'match_type' => $window['line_count'] > 1
+                        ? 'token_match_across_lines'
+                        : 'token_match',
                     'matched_text' => $candidateRaw,
                 ];
             }
 
             // 4. Fuzzy similarity for OCR damage.
-            similar_text($expectedNormalized, $candidateNormalized, $percent);
+            // Only use fuzzy matching on reasonably short windows so we do not match
+            // random paragraphs or warning text.
+            if (strlen($candidateNormalized) <= strlen($expectedNormalized) + 20) {
+                similar_text($expectedNormalized, $candidateNormalized, $percent);
 
-            if ($percent >= 88 && $percent > $best['confidence']) {
-                $best = [
-                    'found' => true,
-                    'confidence' => (int) round($percent),
-                    'match_type' => 'fuzzy_match',
-                    'matched_text' => $candidateRaw,
-                ];
+                if ($percent >= 88 && $percent > $best['confidence']) {
+                    $best = [
+                        'found' => true,
+                        'confidence' => (int) round($percent),
+                        'match_type' => $window['line_count'] > 1
+                            ? 'fuzzy_match_across_lines'
+                            : 'fuzzy_match',
+                        'matched_text' => $candidateRaw,
+                    ];
+                }
             }
         }
 
-        // Confidence interpretation:
-        // 90+ pass-worthy
-        // 75-89 review-worthy
-        // below 75 not found
         if ($best['confidence'] >= 75) {
             $best['found'] = true;
         } else {
@@ -1116,6 +1150,72 @@ class LabelParser {
         return $best;
     }
 
+    private function buildBrandSearchWindows(array $lines): array
+    {
+        $clean = [];
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            // Keep the raw-ish line, but normalize obvious spacing.
+            $line = preg_replace('/\s+/', ' ', $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $clean[] = $line;
+        }
+
+        $windows = [];
+        $seen = [];
+
+        $count = count($clean);
+
+        for ($i = 0; $i < $count; $i++) {
+            /*
+            * Brand names are often split across 1–4 OCR lines.
+            * Example:
+            * 12345
+            * IMPORTS
+            */
+            for ($size = 1; $size <= 4; $size++) {
+                if ($i + $size > $count) {
+                    break;
+                }
+
+                $parts = array_slice($clean, $i, $size);
+                $text = trim(implode(' ', $parts));
+
+                if ($text === '') {
+                    continue;
+                }
+
+                $key = $this->normalizeComparableText(
+                    $this->normalizeOcrLine($text)
+                );
+
+                if ($key === '' || isset($seen[$key])) {
+                    continue;
+                }
+
+                $seen[$key] = true;
+
+                $windows[] = [
+                    'text' => $text,
+                    'line_count' => $size,
+                    'start_line' => $i,
+                ];
+            }
+        }
+
+        return $windows;
+    }
+    
     private function buildSearchWindows(array $lines): array {
         $windows = [];
 
