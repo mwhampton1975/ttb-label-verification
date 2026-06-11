@@ -13,7 +13,7 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
         $region = $config['bedrock_region'] ?? getenv('AWS_REGION') ?: 'us-east-2';
 
         $this->modelId = $config['bedrock_model_id']
-            ?? 'anthropic.claude-3-5-sonnet-20240620-v1:0';
+            ?? 'anthropic.claude-haiku-4-5-20251001-v1:0';
 
         $clientConfig = [
             'version' => 'latest',
