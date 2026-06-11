@@ -183,7 +183,9 @@ class LabelParser {
 
             "abv" => null,
             "net_contents" => null,
-            "warning_detected" => false,
+            "warning_found" => false,
+            "warning_exact_found" => false,
+            "warning_partial_found" => false,
             "warning_status" => "fail",
             "warning_confidence" => 0,
             "warning_matched_fragments" => [],
@@ -226,7 +228,8 @@ class LabelParser {
 
         $warningResult = $this->detectWarningDetailed($cleanLines);
         $result["warning_found"] = $warningResult["found"];
-        $result["warning_detected"] = $warningResult["detected"];
+        $result["warning_exact_found"] = $warningResult["exact_found"];
+        $result["warning_partial_found"] = $warningResult["partial_found"];
         $result["warning_status"] = $warningResult["status"];
         $result["warning_confidence"] = $warningResult["confidence"];
         $result["warning_matched_fragments"] = $warningResult["matched_fragments"];
@@ -234,7 +237,7 @@ class LabelParser {
         if (!empty($warningResult["flag"])) {
             $result["flags"][] = $warningResult["flag"];
         }
-        
+
         $result["brand"] = $brandResult["value"];
         $result["brand_confidence"] = $brandResult["confidence"];
 
@@ -631,98 +634,70 @@ class LabelParser {
         return null;
     }
 
-    private function detectWarning($lines) {
-        foreach ($lines as $line) {
-            if (strpos($line, "GOVERNMENT WARNING") !== false) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function detectWarningDetailed(array $lines): array
     {
         $text = implode(' ', $lines);
-        $text = $this->normalizeWarningText($text);
+        $normalizedText = $this->normalizeWarningText($text);
 
-        $score = 0;
-        $fragments = [];
+        $requiredWarning = $this->normalizeWarningText(
+            'GOVERNMENT WARNING: ' .
+            'ACCORDING TO THE SURGEON GENERAL, WOMEN SHOULD NOT DRINK ALCOHOLIC BEVERAGES DURING PREGNANCY BECAUSE OF THE RISK OF BIRTH DEFECTS. ' .
+            'CONSUMPTION OF ALCOHOLIC BEVERAGES IMPAIRS YOUR ABILITY TO DRIVE A CAR OR OPERATE MACHINERY, AND MAY CAUSE HEALTH PROBLEMS.'
+        );
 
-        // Strong header evidence
-        if (preg_match('/GOVERNMENT\s+WARNING/', $text)) {
-            $score += 30;
-            $fragments[] = 'GOVERNMENT WARNING';
-        } elseif (preg_match('/SURGEON\s+GENERAL/', $text)) {
-            $score += 20;
-            $fragments[] = 'SURGEON GENERAL';
-        }
-
-        // Pregnancy / birth defect clause evidence
-        if (preg_match('/PREGNAN|WOMEN|WOM\b|BIRTH|DEFECT/', $text)) {
-            $score += 20;
-            $fragments[] = 'PREGNANCY/BIRTH DEFECT WARNING';
-        }
-
-        // Alcoholic beverage clause evidence
-        if (preg_match('/ALCOHOLIC\s+BEVERAGES|ALCOHOL|BEVERAGES/', $text)) {
-            $score += 10;
-            $fragments[] = 'ALCOHOLIC BEVERAGES';
-        }
-
-        // Driving / machinery clause evidence
-        if (preg_match('/DRIVE|CAR|OPERATE|MACHINERY|MACH/', $text)) {
-            $score += 20;
-            $fragments[] = 'DRIVING/OPERATING MACHINERY';
-        }
-
-        // Health problems clause evidence
-        if (preg_match('/HEALTH\s+PROBLEMS|PROBLEMS/', $text)) {
-            $score += 15;
-            $fragments[] = 'HEALTH PROBLEMS';
-        }
-
-        // Try to pull the most relevant warning-looking text block.
-        $matchedText = $this->extractWarningWindow($lines);
-
-        /*
-        * Interpretation:
-        * 85+ = enough OCR evidence to treat warning as detected
-        * 45-84 = warning likely present but not readable enough to confirm
-        * <45 = not detected
-        */
-        if ($score >= 85) {
+        // Exact normalized warning found.
+        if (str_contains($normalizedText, $requiredWarning)) {
             return [
                 'found' => true,
-                'detected' => true,
+                'exact_found' => true,
+                'partial_found' => false,
                 'status' => 'pass',
-                'confidence' => min(100, $score),
-                'matched_fragments' => $fragments,
-                'matched_text' => $matchedText,
+                'confidence' => 100,
+                'matched_fragments' => ['FULL_WARNING_EXACT_MATCH'],
+                'matched_text' => $requiredWarning,
                 'flag' => null,
             ];
         }
 
-        if ($score >= 45) {
-            return [
-                'found' => false,
-                'detected' => true,
-                'status' => 'review',
-                'confidence' => min(100, $score),
-                'matched_fragments' => $fragments,
-                'matched_text' => $matchedText,
-                'flag' => 'WARNING_PARTIAL_OR_UNREADABLE',
-            ];
+        $fragments = [];
+
+        if (preg_match('/GOVERNMENT\s+WARNING/', $normalizedText)) {
+            $fragments[] = 'GOVERNMENT WARNING';
         }
+
+        if (preg_match('/SURGEON\s+GENERAL/', $normalizedText)) {
+            $fragments[] = 'SURGEON GENERAL';
+        }
+
+        if (preg_match('/WOMEN|PREGNANCY|BIRTH|DEFECTS?/', $normalizedText)) {
+            $fragments[] = 'PREGNANCY/BIRTH DEFECT LANGUAGE';
+        }
+
+        if (preg_match('/ALCOHOLIC\s+BEVERAGES|ALCOHOL|BEVERAGES/', $normalizedText)) {
+            $fragments[] = 'ALCOHOLIC BEVERAGES LANGUAGE';
+        }
+
+        if (preg_match('/DRIVE|CAR|OPERATE|MACHINERY|MACH/', $normalizedText)) {
+            $fragments[] = 'DRIVING/MACHINERY LANGUAGE';
+        }
+
+        if (preg_match('/HEALTH\s+PROBLEMS|PROBLEMS/', $normalizedText)) {
+            $fragments[] = 'HEALTH PROBLEMS LANGUAGE';
+        }
+
+        $partialFound = count($fragments) > 0;
 
         return [
             'found' => false,
-            'detected' => false,
+            'exact_found' => false,
+            'partial_found' => $partialFound,
             'status' => 'fail',
-            'confidence' => min(100, $score),
+            'confidence' => $partialFound ? 50 : 0,
             'matched_fragments' => $fragments,
-            'matched_text' => $matchedText,
-            'flag' => 'WARNING_NOT_FOUND',
+            'matched_text' => $partialFound ? $this->extractWarningWindow($lines) : null,
+            'flag' => $partialFound
+                ? 'WARNING_PARTIAL_OR_UNREADABLE'
+                : 'WARNING_NOT_FOUND',
         ];
     }
 
@@ -735,20 +710,18 @@ class LabelParser {
             'GOVERNMNT' => 'GOVERNMENT',
             'WARN1NG' => 'WARNING',
             'SURGE0N' => 'SURGEON',
-            'GENERAL,' => 'GENERAL',
             'W0MEN' => 'WOMEN',
-            'W0M' => 'WOM',
             'ALC0HOL' => 'ALCOHOL',
             'ALCOH0L' => 'ALCOHOL',
-            'BEVERAGES DU' => 'BEVERAGES DURING',
             'B1RTH' => 'BIRTH',
             'DEFECT5' => 'DEFECTS',
             'DR1VE' => 'DRIVE',
             'MACH1NERY' => 'MACHINERY',
-            'MAC HINERY' => 'MACHINERY',
         ];
 
         $text = strtr($text, $replacements);
+
+        // Remove punctuation and normalize spacing so OCR line breaks do not matter.
         $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
         $text = preg_replace('/\s+/', ' ', $text);
 
@@ -762,7 +735,7 @@ class LabelParser {
         foreach ($lines as $line) {
             $normalized = $this->normalizeWarningText($line);
 
-            if (preg_match('/GOVERNMENT|WARNING|SURGEON|GENERAL|PREGNAN|WOMEN|WOM\b|BIRTH|DEFECT|ALCOHOL|BEVERAGES|DRIVE|CAR|OPERATE|MACH|HEALTH|PROBLEMS/', $normalized)) {
+            if (preg_match('/GOVERNMENT|WARNING|SURGEON|GENERAL|PREGNAN|WOMEN|BIRTH|DEFECT|ALCOHOL|BEVERAGES|DRIVE|CAR|OPERATE|MACH|HEALTH|PROBLEMS/', $normalized)) {
                 $warningLines[] = $line;
             }
         }
