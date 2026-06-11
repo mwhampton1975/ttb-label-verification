@@ -820,33 +820,6 @@ class LabelParser {
         return $flags;
     }
 
-    private function normalizeOcrLine(string $line): string {
-        $line = strtoupper($line);
-
-        $replacements = [
-            'WHISKEY' => 'WHISKY',
-            'WH1SKY' => 'WHISKY',
-            'V0DKA' => 'VODKA',
-            'B0URBON' => 'BOURBON',
-            'TEQU1LA' => 'TEQUILA',
-            'L1QUEUR' => 'LIQUEUR',
-            'CORD1AL' => 'CORDIAL',
-            'FLAV0RED' => 'FLAVORED',
-            'FLAVOURED' => 'FLAVORED',
-            'FLAVOUR' => 'FLAVOR',
-            'FLAVOURS' => 'FLAVORS',
-            'CURAÇAO' => 'CURACAO',
-            'CRÈME' => 'CREME',
-        ];
-
-        $line = strtr($line, $replacements);
-
-        $line = preg_replace('/[^A-Z0-9%\.\/\-\s\'&]/', ' ', $line);
-        $line = preg_replace('/\s+/', ' ', $line);
-
-        return trim($line);
-    }
-
     private function findExpectedBrand(?string $expectedBrand, array $lines): array {
         if (!$expectedBrand || trim($expectedBrand) === '') {
             return [
