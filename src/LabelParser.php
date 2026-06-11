@@ -38,7 +38,7 @@ class LabelParser {
      * - Generic base classes last.
      * - WHISKEY is normalized to WHISKY before these rules run.
      */
-    private array $designationRules = [
+    private array $ttbDesignationRules = [
         // Whisky - most specific first
         ['pattern' => '/\bBOTTLED\s+IN\s+BOND\s+STRAIGHT\s+BOURBON\s+WHISKY\b/', 'class' => 'WHISKY', 'type' => 'BOTTLED IN BOND STRAIGHT BOURBON WHISKY', 'score' => 100],
         ['pattern' => '/\bSTRAIGHT\s+BOURBON\s+WHISKY\b/', 'class' => 'WHISKY', 'type' => 'STRAIGHT BOURBON WHISKY', 'score' => 100],
@@ -89,7 +89,7 @@ class LabelParser {
         ['pattern' => '/\b(MEZCAL|MESCAL)\b/', 'class' => 'AGAVE SPIRITS', 'type' => 'MEZCAL', 'score' => 90],
     ];
 
-    private array $liqueurRules = [
+    private array $ttbLiqueurRules = [
         ['pattern' => '/\bRUM\s+(LIQUEUR|CORDIAL)\b/', 'type' => 'RUM LIQUEUR'],
         ['pattern' => '/\bGIN\s+(LIQUEUR|CORDIAL)\b/', 'type' => 'GIN LIQUEUR'],
         ['pattern' => '/\bBRANDY\s+(LIQUEUR|CORDIAL)\b/', 'type' => 'BRANDY LIQUEUR'],
@@ -171,13 +171,16 @@ class LabelParser {
             "designation" => null,
             "matched_text" => null,
             "classification_confidence" => 0,
+
             "needs_review" => false,
+
             "flags" => [],
 
             "abv" => null,
             "net_contents" => null,
             "warning_found" => false,
-            "status" => "review",
+
+            "status" => "review"
         ];
 
         $lines = array_map('trim', explode("\n", strtoupper((string) $text)));
@@ -207,6 +210,14 @@ class LabelParser {
         $result["brand"] = $brandResult["value"];
         $result["brand_confidence"] = $brandResult["confidence"];
 
+        $result["flags"] = $this->evaluateRegulatoryFlags($result);
+        $result["flags"] = array_merge(
+            $result["flags"],
+            $this->evaluateFieldOfVision(
+                $cleanLines,
+                $result
+            )
+        );
         $result["status"] = $this->evaluateStatus($result);
 
         return $result;
@@ -307,7 +318,7 @@ class LabelParser {
         }
 
         // 4. Exact designation phrase rules.
-        foreach ($this->designationRules as $rule) {
+        foreach ($this->ttbDesignationRules as $rule) {
             foreach ($candidates as $candidate) {
                 if (preg_match($rule['pattern'], $candidate['line'])) {
                     $confidence = min(100, $rule['score'] + (int) floor($candidate['score'] / 10));
@@ -437,7 +448,7 @@ class LabelParser {
     }
 
     private function detectLiqueur(string $text): ?array {
-        foreach ($this->liqueurRules as $rule) {
+        foreach ($this->ttbLiqueurRules as $rule) {
             if (preg_match($rule['pattern'], $text, $m)) {
                 $type = $rule['type'];
 
@@ -582,7 +593,7 @@ class LabelParser {
 
         return match ($base) {
             'WHISKEY' => 'WHISKY',
-            default => $base,
+            default => $base
         };
     }
 
@@ -686,12 +697,25 @@ class LabelParser {
         return $merged;
     }
 
-    private function evaluateStatus(array $result): string {
-        $flags = [];
+    private function evaluateStatus(array $result): string
+    {
+        $flags = $result['flags'] ?? [];
 
-        if (empty($result['class']) && empty($result['type']) && empty($result['designation'])) {
+        //
+        // HARD FAILS
+        //
+
+        if (
+            empty($result['class']) &&
+            empty($result['type']) &&
+            empty($result['designation'])
+        ) {
             return 'fail';
         }
+
+        //
+        // REVIEW CONDITIONS
+        //
 
         if (empty($result['abv'])) {
             $flags[] = 'Missing alcohol content.';
@@ -709,13 +733,169 @@ class LabelParser {
             $flags[] = 'Classification confidence below 85.';
         }
 
-        // Government warning may not be required on every label panel,
-        // depending on whether OCR text includes the full container label set.
-        // Treat missing warning as review, not automatic fail.
         if (empty($result['warning_found'])) {
             $flags[] = 'Government warning not detected in OCR text.';
         }
 
-        return count($flags) > 0 ? 'review' : 'pass';
+        //
+        // New compliance checks
+        //
+
+        if (in_array(
+            'POSSIBLE_FIELD_OF_VISION_VIOLATION',
+            $flags
+        )) {
+            $flags[] =
+                'Mandatory information may not appear in same field of vision.';
+        }
+
+        if (
+            in_array(
+                'LOW_BRAND_CONFIDENCE',
+                $flags
+            )
+        ) {
+            $flags[] =
+                'Brand extraction confidence is low.';
+        }
+
+        if (
+            in_array(
+                'LOW_CLASSIFICATION_CONFIDENCE',
+                $flags
+            )
+        ) {
+            $flags[] =
+                'Classification confidence is low.';
+        }
+
+        //
+        // Persist expanded messages
+        //
+
+        $result['flags'] = array_unique($flags);
+
+        //
+        // REVIEW
+        //
+
+        if (count($flags) > 0) {
+            return 'review';
+        }
+
+        //
+        // PASS
+        //
+
+        return 'pass';
+    }
+
+    private function evaluateRegulatoryFlags(array $result): array
+    {
+        $flags = [];
+
+        if (!$result["warning_found"]) {
+            $flags[] = "WARNING_NOT_FOUND";
+        }
+
+        if (empty($result["abv"])) {
+            $flags[] = "ABV_NOT_FOUND";
+        }
+
+        if (empty($result["net_contents"])) {
+            $flags[] = "NET_CONTENTS_NOT_FOUND";
+        }
+
+        if (empty($result["class"])) {
+            $flags[] = "CLASSIFICATION_FAILED";
+        }
+
+        if ($result["brand_confidence"] < 60) {
+            $flags[] = "LOW_BRAND_CONFIDENCE";
+        }
+
+        if ($result["classification_confidence"] < 70) {
+            $flags[] = "LOW_CLASSIFICATION_CONFIDENCE";
+        }
+
+        return $flags;
+    }
+
+    private function findLineNumber(
+        array $lines,
+        string $search
+    ): ?int
+    {
+        foreach ($lines as $i => $line) {
+
+            if (str_contains($line, $search)) {
+                return $i;
+            }
+        }
+
+        return null;
+    }
+
+    private function evaluateFieldOfVision(
+        array $lines,
+        array $result
+    ): array
+    {
+        $flags = [];
+
+        $brandLine = null;
+        $classLine = null;
+        $abvLine = null;
+
+        if (!empty($result["brand"])) {
+
+            foreach ($lines as $i => $line) {
+
+                if ($line === $result["brand"]) {
+                    $brandLine = $i;
+                    break;
+                }
+            }
+        }
+
+        if (!empty($result["type"])) {
+
+            foreach ($lines as $i => $line) {
+
+                if (str_contains($line, $result["type"])) {
+                    $classLine = $i;
+                    break;
+                }
+            }
+        }
+
+        foreach ($lines as $i => $line) {
+
+            if (preg_match('/\d+(?:\.\d+)?\s*%/', $line)) {
+
+                $abvLine = $i;
+                break;
+            }
+        }
+
+        $positions = array_filter([
+            $brandLine,
+            $classLine,
+            $abvLine
+        ], fn($v) => $v !== null);
+
+        if (count($positions) >= 2) {
+
+            $distance =
+                max($positions) - min($positions);
+
+            if ($distance > 10) {
+
+                $flags[] =
+                    "POSSIBLE_FIELD_OF_VISION_VIOLATION";
+            }
+        }
+
+        return $flags;
     }
 }

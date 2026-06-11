@@ -16,3 +16,29 @@ classification rules.
 The classification engine was intentionally designed
 as a data-driven rule system that can be expanded to
 cover the complete TTB classification catalog.
+
+Architecture
+Phase 1
+--------
+OCR (Tesseract)
+
+Phase 2
+--------
+Rule-based extraction
+TTB designation engine
+
+Phase 3
+--------
+Application comparison engine
+
+Phase 4
+--------
+LLM adjudication only when:
+  - confidence < 80
+  - classification failed
+  - OCR ambiguity detected
+  - application mismatch found
+
+Phase 5
+--------
+Agent review queue
