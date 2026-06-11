@@ -99,10 +99,12 @@ $parsed = $parser->parse($output, $expected);
 $comparator = new ApplicationComparator();
 $comparison = $comparator->compare($expected, $parsed);
 
-$llmRecommended = shouldUseLlm($parsed, $comparison);
+$llmRequested = !empty($_POST['use_llm']);
+$llmRecommendedByRules = shouldUseLlm($parsed, $comparison);
+$llmExecuted = false;
 $llmResult = null;
 
-if ($llmRecommended) {
+if ($llmRequested && $llmRecommendedByRules) {
     $adjudicator = LlmAdjudicatorFactory::make();
 
     $llmResult = $adjudicator->adjudicate([
@@ -119,6 +121,8 @@ if ($llmRecommended) {
             'do_not_invent' => 'Do not infer missing text unless supported by OCR evidence.'
         ]
     ]);
+
+    $llmExecuted = true;
 }
 
 
@@ -200,12 +204,18 @@ $llmProvider = $llmResult['provider'] ?? null;
 $llmEnabled = $llmResult['enabled'] ?? null;
 ?>
 
-<div class="status <?php echo $llmRecommended ? 'review' : 'pass'; ?>">
-    LLM Gate:
-    <?php echo $llmRecommended ? 'Recommended for ambiguous / low-confidence review' : 'Not needed based on rule-based checks'; ?>
+<div class="status <?php echo $llmRequested ? ($llmRecommendedByRules ? 'review' : 'pass') : 'review'; ?>">
+    LLM Adjudication:
+    <?php if (!$llmRequested): ?>
+        Disabled for this run.
+    <?php elseif (!$llmRecommendedByRules): ?>
+        Enabled, but not needed based on rule-based checks.
+    <?php else: ?>
+        Enabled and recommended for ambiguous / low-confidence review.
+    <?php endif; ?>
 </div>
 
-<?php if ($llmRecommended): ?>
+<?php if ($llmExecuted): ?>
     <div class="status <?php echo statusClass($llmFinal ?? 'review'); ?>">
         LLM Adjudication Result:
         <?php echo strtoupper(htmlspecialchars((string)($llmFinal ?? 'not returned'))); ?>
@@ -242,7 +252,7 @@ $llmEnabled = $llmResult['enabled'] ?? null;
     </tbody>
 </table>
 
-<?php if ($llmRecommended): ?>
+<?php if ($llmExecuted): ?>
     <h2>LLM Adjudication</h2>
 
     <?php if ($llmResult === null): ?>

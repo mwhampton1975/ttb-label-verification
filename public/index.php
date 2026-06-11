@@ -54,6 +54,19 @@
         </label>
     </fieldset>
 
+    <fieldset>
+        <legend>AI Adjudication</legend>
+
+        <label>
+            <input type="checkbox" name="use_llm" value="1">
+            Use LLM adjudication for ambiguous / low-confidence cases
+        </label>
+
+        <p style="font-size: 0.9em; color: #555;">
+            Leave unchecked while debugging to skip Bedrock.
+        </p>
+    </fieldset>
+
     <button type="submit">Verify Label</button>
 </form>
 
