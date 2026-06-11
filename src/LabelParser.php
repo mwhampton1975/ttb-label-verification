@@ -190,6 +190,7 @@ class LabelParser {
             "warning_confidence" => 0,
             "warning_matched_fragments" => [],
             "warning_matched_text" => null,
+            "warning_debug" => null,
 
             "status" => "review"
         ];
@@ -234,6 +235,7 @@ class LabelParser {
         $result["warning_confidence"] = $warningResult["confidence"];
         $result["warning_matched_fragments"] = $warningResult["matched_fragments"];
         $result["warning_matched_text"] = $warningResult["matched_text"];
+        $result["warning_debug"] = $warningResult["debug_warning"] ?? null;
         if (!empty($warningResult["flag"])) {
             $result["flags"][] = $warningResult["flag"];
         }
@@ -641,6 +643,12 @@ class LabelParser {
 
         $exactWarningResult = $this->detectExactGovernmentWarning($normalizedText);
 
+        $resultDebug = [
+            'normalized_warning_text' => $normalizedText,
+            'exact_warning_found' => $exactWarningResult['found'],
+            'exact_warning_matched_text' => $exactWarningResult['matched_text'],
+        ];
+
         if ($exactWarningResult['found']) {
             return [
                 'found' => true,
@@ -686,10 +694,11 @@ class LabelParser {
             'found' => false,
             'exact_found' => false,
             'partial_found' => $partialFound,
-            'status' => 'fail',
+            'status' => $partialFound ? 'review' : 'fail',
             'confidence' => $partialFound ? 50 : 0,
             'matched_fragments' => $fragments,
             'matched_text' => $partialFound ? $this->extractWarningWindow($lines) : null,
+            'debug_warning' => $resultDebug,
             'flag' => $partialFound
                 ? 'WARNING_PARTIAL_OR_UNREADABLE'
                 : 'WARNING_NOT_FOUND',
@@ -756,25 +765,28 @@ class LabelParser {
     private function detectExactGovernmentWarning(string $normalizedText): array
     {
         /*
-        * This requires the required warning language in order, including:
-        * - GOVERNMENT WARNING:
-        * - (1)
-        * - (2)
+        * Accepts either punctuation-preserved OCR:
+        * GOVERNMENT WARNING: (1) ...
         *
-        * It allows flexible whitespace / line breaks.
-        * It also allows OCR to read the comma after MACHINERY as either comma or period.
+        * Or punctuation-stripped OCR:
+        * GOVERNMENT WARNING 1 ...
+        *
+        * Still requires the warning language in the correct order.
+        * Allows flexible whitespace and allows OCR to read "machinery, and" as
+        * either "machinery, and" or "machinery. and".
+        * Does not care if OCR junk appears after "health problems".
         */
         $pattern = '/
-            GOVERNMENT\s+WARNING\s*:\s*
-            \(\s*1\s*\)\s*
-            ACCORDING\s+TO\s+THE\s+SURGEON\s+GENERAL\s*,\s*
+            GOVERNMENT\s+WARNING\s*:?\s*
+            \(?\s*1\s*\)?\s*
+            ACCORDING\s+TO\s+THE\s+SURGEON\s+GENERAL\s*,?\s*
             WOMEN\s+SHOULD\s+NOT\s+DRINK\s+ALCOHOLIC\s+BEVERAGES\s+
             DURING\s+PREGNANCY\s+BECAUSE\s+OF\s+THE\s+RISK\s+OF\s+
-            BIRTH\s+DEFECTS\s*\.\s*
-            \(\s*2\s*\)\s*
+            BIRTH\s+DEFECTS\s*\.?\s*
+            \(?\s*2\s*\)?\s*
             CONSUMPTION\s+OF\s+ALCOHOLIC\s+BEVERAGES\s+
             IMPAIRS\s+YOUR\s+ABILITY\s+TO\s+DRIVE\s+A\s+CAR\s+OR\s+
-            OPERATE\s+MACHINERY\s*[,\.]\s*
+            OPERATE\s+MACHINERY\s*[,\.]?\s*
             AND\s+MAY\s+CAUSE\s+HEALTH\s+PROBLEMS\s*\.?
         /x';
 
