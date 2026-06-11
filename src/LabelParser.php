@@ -639,14 +639,9 @@ class LabelParser {
         $text = implode(' ', $lines);
         $normalizedText = $this->normalizeWarningText($text);
 
-        $requiredWarning = $this->normalizeWarningText(
-            'GOVERNMENT WARNING: ' .
-            'ACCORDING TO THE SURGEON GENERAL, WOMEN SHOULD NOT DRINK ALCOHOLIC BEVERAGES DURING PREGNANCY BECAUSE OF THE RISK OF BIRTH DEFECTS. ' .
-            'CONSUMPTION OF ALCOHOLIC BEVERAGES IMPAIRS YOUR ABILITY TO DRIVE A CAR OR OPERATE MACHINERY, AND MAY CAUSE HEALTH PROBLEMS.'
-        );
+        $exactWarningResult = $this->detectExactGovernmentWarning($normalizedText);
 
-        // Exact normalized warning found.
-        if (str_contains($normalizedText, $requiredWarning)) {
+        if ($exactWarningResult['found']) {
             return [
                 'found' => true,
                 'exact_found' => true,
@@ -654,7 +649,7 @@ class LabelParser {
                 'status' => 'pass',
                 'confidence' => 100,
                 'matched_fragments' => ['FULL_WARNING_EXACT_MATCH'],
-                'matched_text' => $requiredWarning,
+                'matched_text' => $exactWarningResult['matched_text'],
                 'flag' => null,
             ];
         }
@@ -706,8 +701,11 @@ class LabelParser {
         $text = strtoupper($text);
 
         $replacements = [
+            "GOV'T" => 'GOVERNMENT',
+            'GOVT' => 'GOVERNMENT',
             'G0VERNMENT' => 'GOVERNMENT',
             'GOVERNMNT' => 'GOVERNMENT',
+
             'WARN1NG' => 'WARNING',
             'SURGE0N' => 'SURGEON',
             'W0MEN' => 'WOMEN',
@@ -721,9 +719,17 @@ class LabelParser {
 
         $text = strtr($text, $replacements);
 
-        // Remove punctuation and normalize spacing so OCR line breaks do not matter.
-        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        // Keep letters, numbers, spaces, parentheses, colon, comma, and period.
+        $text = preg_replace('/[^A-Z0-9\s\(\)\:\,\.]/', ' ', $text);
+
+        // Normalize spaces around punctuation.
         $text = preg_replace('/\s+/', ' ', $text);
+        $text = preg_replace('/\s+([:,.])/', '$1', $text);
+        $text = preg_replace('/([:,.])(?=[A-Z0-9(])/', '$1 ', $text);
+
+        // Normalize clause markers like "( 1 )" to "(1)".
+        $text = preg_replace('/\(\s*1\s*\)/', '(1)', $text);
+        $text = preg_replace('/\(\s*2\s*\)/', '(2)', $text);
 
         return trim($text);
     }
@@ -745,6 +751,44 @@ class LabelParser {
         }
 
         return trim(implode(' ', $warningLines));
+    }
+
+    private function detectExactGovernmentWarning(string $normalizedText): array
+    {
+        /*
+        * This requires the required warning language in order, including:
+        * - GOVERNMENT WARNING:
+        * - (1)
+        * - (2)
+        *
+        * It allows flexible whitespace / line breaks.
+        * It also allows OCR to read the comma after MACHINERY as either comma or period.
+        */
+        $pattern = '/
+            GOVERNMENT\s+WARNING\s*:\s*
+            \(\s*1\s*\)\s*
+            ACCORDING\s+TO\s+THE\s+SURGEON\s+GENERAL\s*,\s*
+            WOMEN\s+SHOULD\s+NOT\s+DRINK\s+ALCOHOLIC\s+BEVERAGES\s+
+            DURING\s+PREGNANCY\s+BECAUSE\s+OF\s+THE\s+RISK\s+OF\s+
+            BIRTH\s+DEFECTS\s*\.\s*
+            \(\s*2\s*\)\s*
+            CONSUMPTION\s+OF\s+ALCOHOLIC\s+BEVERAGES\s+
+            IMPAIRS\s+YOUR\s+ABILITY\s+TO\s+DRIVE\s+A\s+CAR\s+OR\s+
+            OPERATE\s+MACHINERY\s*[,\.]\s*
+            AND\s+MAY\s+CAUSE\s+HEALTH\s+PROBLEMS\s*\.?
+        /x';
+
+        if (preg_match($pattern, $normalizedText, $m)) {
+            return [
+                'found' => true,
+                'matched_text' => trim($m[0]),
+            ];
+        }
+
+        return [
+            'found' => false,
+            'matched_text' => null,
+        ];
     }
 
     private function extractBrand($lines) {
