@@ -2,6 +2,12 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+require_once __DIR__ . "/../vendor/autoload.php";
+
+require_once __DIR__ . "/../src/Llm/LlmAdjudicatorInterface.php";
+require_once __DIR__ . "/../src/Llm/NullLlmAdjudicator.php";
+require_once __DIR__ . "/../src/Llm/BedrockAdjudicator.php";
+require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
 
 function shouldUseLlm(array $parsed, array $comparison): bool
 {
@@ -76,6 +82,27 @@ $comparator = new ApplicationComparator();
 $comparison = $comparator->compare($expected, $parsed);
 
 $llmRecommended = shouldUseLlm($parsed, $comparison);
+$llmResult = null;
+
+if ($llmRecommended) {
+    $adjudicator = LlmAdjudicatorFactory::make();
+
+    $llmResult = $adjudicator->adjudicate([
+        'application_data' => $expected,
+        'ocr_text' => $output,
+        'parser_result' => $parsed,
+        'comparison_result' => $comparison,
+        'rules_summary' => [
+            'brand' => 'Brand should match application data after reasonable normalization.',
+            'class_type' => 'Class/type should match or be equivalent to the application designation.',
+            'abv' => 'Compare numeric ABV value only.',
+            'net_contents' => 'Compare normalized volume.',
+            'government_warning' => 'Exact required warning text is required for pass. Partial warning evidence means review.',
+            'do_not_invent' => 'Do not infer missing text unless supported by OCR evidence.'
+        ]
+    ]);
+}
+
 
 ?>
 <!DOCTYPE html>
