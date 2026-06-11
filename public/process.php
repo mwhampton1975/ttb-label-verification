@@ -34,6 +34,24 @@ function shouldUseLlm(array $parsed, array $comparison): bool
     return false;
 }
 
+function statusClass(?string $status): string
+{
+    $status = strtolower((string) $status);
+
+    return in_array($status, ['pass', 'review', 'fail'], true)
+        ? $status
+        : 'review';
+}
+
+function renderValue(mixed $value): string
+{
+    if (is_array($value) || is_object($value)) {
+        return htmlspecialchars(print_r($value, true));
+    }
+
+    return htmlspecialchars((string) $value);
+}
+
 if (!isset($_FILES['label'])) {
     die("No file uploaded");
 }
@@ -176,10 +194,26 @@ if ($llmRecommended) {
     <?php echo strtoupper(htmlspecialchars($comparison['overall_status'])); ?>
 </div>
 
+<?php
+$llmFinal = $llmResult['final_recommendation'] ?? null;
+$llmProvider = $llmResult['provider'] ?? null;
+$llmEnabled = $llmResult['enabled'] ?? null;
+?>
+
 <div class="status <?php echo $llmRecommended ? 'review' : 'pass'; ?>">
-    LLM Adjudication:
+    LLM Gate:
     <?php echo $llmRecommended ? 'Recommended for ambiguous / low-confidence review' : 'Not needed based on rule-based checks'; ?>
 </div>
+
+<?php if ($llmRecommended): ?>
+    <div class="status <?php echo statusClass($llmFinal ?? 'review'); ?>">
+        LLM Adjudication Result:
+        <?php echo strtoupper(htmlspecialchars((string)($llmFinal ?? 'not returned'))); ?>
+        <?php if ($llmProvider): ?>
+            via <?php echo htmlspecialchars((string)$llmProvider); ?>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 
 <h2>Field Comparison</h2>
 
@@ -208,6 +242,83 @@ if ($llmRecommended) {
     </tbody>
 </table>
 
+<?php if ($llmRecommended): ?>
+    <h2>LLM Adjudication</h2>
+
+    <?php if ($llmResult === null): ?>
+        <pre>LLM was recommended, but no LLM result was returned.</pre>
+    <?php else: ?>
+
+        <table>
+            <tbody>
+                <tr>
+                    <th>Enabled</th>
+                    <td><?php echo htmlspecialchars(var_export($llmResult['enabled'] ?? null, true)); ?></td>
+                </tr>
+                <tr>
+                    <th>Provider</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['provider'] ?? 'unknown')); ?></td>
+                </tr>
+                <tr>
+                    <th>Model</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['model_id'] ?? $llmResult['model'] ?? '')); ?></td>
+                </tr>
+                <tr>
+                    <th>Final Recommendation</th>
+                    <td><strong><?php echo strtoupper(htmlspecialchars((string)($llmResult['final_recommendation'] ?? 'not returned'))); ?></strong></td>
+                </tr>
+                <tr>
+                    <th>Confidence</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['confidence'] ?? '')); ?></td>
+                </tr>
+                <tr>
+                    <th>Human Review Required</th>
+                    <td><?php echo htmlspecialchars(var_export($llmResult['human_review_required'] ?? null, true)); ?></td>
+                </tr>
+                <tr>
+                    <th>Summary</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['summary'] ?? '')); ?></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <?php if (!empty($llmResult['field_results']) && is_array($llmResult['field_results'])): ?>
+            <h3>LLM Field Results</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                        <th>Evidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($llmResult['field_results'] as $fieldName => $field): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars((string)$fieldName); ?></td>
+                            <td><strong><?php echo strtoupper(htmlspecialchars((string)($field['status'] ?? 'review'))); ?></strong></td>
+                            <td><?php echo htmlspecialchars((string)($field['reason'] ?? '')); ?></td>
+                            <td><?php echo htmlspecialchars((string)($field['evidence'] ?? '')); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
+        <?php if (!empty($llmResult['review_notes'])): ?>
+            <h3>LLM Review Notes</h3>
+            <ul>
+                <?php foreach ($llmResult['review_notes'] as $note): ?>
+                    <li><?php echo htmlspecialchars((string)$note); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+    <?php endif; ?>
+<?php endif; ?>
+
 <h2>Application Data</h2>
 <pre><?php print_r($expected); ?></pre>
 
@@ -216,6 +327,9 @@ if ($llmRecommended) {
 
 <h2>Comparison Result</h2>
 <pre><?php print_r($comparison); ?></pre>
+
+<h2>LLM Raw Result</h2>
+<pre><?php print_r($llmResult); ?></pre>
 
 <h2>Raw OCR Output</h2>
 <pre><?php echo htmlspecialchars($output); ?></pre>

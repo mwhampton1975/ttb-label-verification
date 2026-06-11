@@ -74,3 +74,9 @@ Architecture
    - whether human review is needed
 
 8. Store review item or display result
+
+
+Permissions:
+mkdir -p public/uploads
+chown admin:www-data public/uploads
+chmod 775 public/uploads
