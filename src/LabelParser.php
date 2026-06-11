@@ -183,7 +183,11 @@ class LabelParser {
 
             "abv" => null,
             "net_contents" => null,
-            "warning_found" => false,
+            "warning_detected" => false,
+            "warning_status" => "fail",
+            "warning_confidence" => 0,
+            "warning_matched_fragments" => [],
+            "warning_matched_text" => null,
 
             "status" => "review"
         ];
@@ -220,7 +224,17 @@ class LabelParser {
         $result["needs_review"] = $classResult["needs_review"] ?? false;
         $result["flags"] = $classResult["flags"] ?? [];
 
-        $result["warning_found"] = $this->detectWarning($cleanLines);
+        $warningResult = $this->detectWarningDetailed($cleanLines);
+        $result["warning_found"] = $warningResult["found"];
+        $result["warning_detected"] = $warningResult["detected"];
+        $result["warning_status"] = $warningResult["status"];
+        $result["warning_confidence"] = $warningResult["confidence"];
+        $result["warning_matched_fragments"] = $warningResult["matched_fragments"];
+        $result["warning_matched_text"] = $warningResult["matched_text"];
+        if (!empty($warningResult["flag"])) {
+            $result["flags"][] = $warningResult["flag"];
+        }
+        
         $result["brand"] = $brandResult["value"];
         $result["brand_confidence"] = $brandResult["confidence"];
 
@@ -625,6 +639,139 @@ class LabelParser {
         }
 
         return false;
+    }
+
+    private function detectWarningDetailed(array $lines): array
+    {
+        $text = implode(' ', $lines);
+        $text = $this->normalizeWarningText($text);
+
+        $score = 0;
+        $fragments = [];
+
+        // Strong header evidence
+        if (preg_match('/GOVERNMENT\s+WARNING/', $text)) {
+            $score += 30;
+            $fragments[] = 'GOVERNMENT WARNING';
+        } elseif (preg_match('/SURGEON\s+GENERAL/', $text)) {
+            $score += 20;
+            $fragments[] = 'SURGEON GENERAL';
+        }
+
+        // Pregnancy / birth defect clause evidence
+        if (preg_match('/PREGNAN|WOMEN|WOM\b|BIRTH|DEFECT/', $text)) {
+            $score += 20;
+            $fragments[] = 'PREGNANCY/BIRTH DEFECT WARNING';
+        }
+
+        // Alcoholic beverage clause evidence
+        if (preg_match('/ALCOHOLIC\s+BEVERAGES|ALCOHOL|BEVERAGES/', $text)) {
+            $score += 10;
+            $fragments[] = 'ALCOHOLIC BEVERAGES';
+        }
+
+        // Driving / machinery clause evidence
+        if (preg_match('/DRIVE|CAR|OPERATE|MACHINERY|MACH/', $text)) {
+            $score += 20;
+            $fragments[] = 'DRIVING/OPERATING MACHINERY';
+        }
+
+        // Health problems clause evidence
+        if (preg_match('/HEALTH\s+PROBLEMS|PROBLEMS/', $text)) {
+            $score += 15;
+            $fragments[] = 'HEALTH PROBLEMS';
+        }
+
+        // Try to pull the most relevant warning-looking text block.
+        $matchedText = $this->extractWarningWindow($lines);
+
+        /*
+        * Interpretation:
+        * 85+ = enough OCR evidence to treat warning as detected
+        * 45-84 = warning likely present but not readable enough to confirm
+        * <45 = not detected
+        */
+        if ($score >= 85) {
+            return [
+                'found' => true,
+                'detected' => true,
+                'status' => 'pass',
+                'confidence' => min(100, $score),
+                'matched_fragments' => $fragments,
+                'matched_text' => $matchedText,
+                'flag' => null,
+            ];
+        }
+
+        if ($score >= 45) {
+            return [
+                'found' => false,
+                'detected' => true,
+                'status' => 'review',
+                'confidence' => min(100, $score),
+                'matched_fragments' => $fragments,
+                'matched_text' => $matchedText,
+                'flag' => 'WARNING_PARTIAL_OR_UNREADABLE',
+            ];
+        }
+
+        return [
+            'found' => false,
+            'detected' => false,
+            'status' => 'fail',
+            'confidence' => min(100, $score),
+            'matched_fragments' => $fragments,
+            'matched_text' => $matchedText,
+            'flag' => 'WARNING_NOT_FOUND',
+        ];
+    }
+
+    private function normalizeWarningText(string $text): string
+    {
+        $text = strtoupper($text);
+
+        $replacements = [
+            'G0VERNMENT' => 'GOVERNMENT',
+            'GOVERNMNT' => 'GOVERNMENT',
+            'WARN1NG' => 'WARNING',
+            'SURGE0N' => 'SURGEON',
+            'GENERAL,' => 'GENERAL',
+            'W0MEN' => 'WOMEN',
+            'W0M' => 'WOM',
+            'ALC0HOL' => 'ALCOHOL',
+            'ALCOH0L' => 'ALCOHOL',
+            'BEVERAGES DU' => 'BEVERAGES DURING',
+            'B1RTH' => 'BIRTH',
+            'DEFECT5' => 'DEFECTS',
+            'DR1VE' => 'DRIVE',
+            'MACH1NERY' => 'MACHINERY',
+            'MAC HINERY' => 'MACHINERY',
+        ];
+
+        $text = strtr($text, $replacements);
+        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        return trim($text);
+    }
+
+    private function extractWarningWindow(array $lines): ?string
+    {
+        $warningLines = [];
+
+        foreach ($lines as $line) {
+            $normalized = $this->normalizeWarningText($line);
+
+            if (preg_match('/GOVERNMENT|WARNING|SURGEON|GENERAL|PREGNAN|WOMEN|WOM\b|BIRTH|DEFECT|ALCOHOL|BEVERAGES|DRIVE|CAR|OPERATE|MACH|HEALTH|PROBLEMS/', $normalized)) {
+                $warningLines[] = $line;
+            }
+        }
+
+        if (empty($warningLines)) {
+            return null;
+        }
+
+        return trim(implode(' ', $warningLines));
     }
 
     private function extractBrand($lines) {
