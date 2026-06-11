@@ -1,12 +1,15 @@
 Assumptions
 
-1. Prototype focuses on automating comparison of label content against application data.
-
-2. Full CFR compliance validation was considered out of scope for a time-constrained proof of concept.
-
-3. OCR extraction is performed locally using Tesseract to satisfy stakeholder concerns regarding latency, network restrictions, and deployment flexibility.
-
-4. Batch processing supports optional CSV metadata to simulate importer submissions containing both application data and associated label images.
+- Prototype focuses on automating comparison of label content against application data.
+- Full CFR compliance validation was considered out of scope for a time-constrained proof of concept.
+- OCR extraction is performed locally using Tesseract to satisfy stakeholder concerns regarding latency, network restrictions, and deployment flexibility.
+- Batch processing supports optional CSV metadata to simulate importer submissions containing both application data and associated label images.
+- TTB application approval data is provided as form fields or JSON.
+- The prototype does not integrate directly with COLAs Online.
+- OCR is performed locally with Tesseract to avoid external network dependency.
+- Heuristic parsing is used first for speed.
+- LLM review is reserved for ambiguous cases.
+- This prototype does not make final legal compliance determinations.
 
 Application is deployed via GitHub and pulled into Lightsail. Apache serves the public/ directory via a symbolic link for simplicity and maintainability in a prototype environment.
 
@@ -16,6 +19,15 @@ classification rules.
 The classification engine was intentionally designed
 as a data-driven rule system that can be expanded to
 cover the complete TTB classification catalog.
+
+The LLM is intentionally not the primary decision-maker. The rules engine is primary, and the LLM serves as an escalation path for ambiguous cases.
+
+LabelParser:
+Extracts fields and detects whether expected fields appear in OCR.
+
+ApplicationComparator:
+Compares expected vs parsed and decides field-level pass/fail/review in a cleaner report.
+
 
 Architecture
 Phase 1

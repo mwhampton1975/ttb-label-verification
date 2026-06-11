@@ -160,11 +160,16 @@ class LabelParser {
         'MINT',
     ];
 
-    public function parse($text) {
+    public function parse($text, array $expected = []) {
 
         $result = [
             "brand" => null,
             "brand_confidence" => 0,
+
+            "expected_brand_found" => null,
+            "expected_brand_confidence" => 0,
+            "expected_brand_match_type" => null,
+            "expected_brand_matched_text" => null,
 
             "class" => null,
             "type" => null,
@@ -191,6 +196,15 @@ class LabelParser {
         $cleanLines = $this->mergeLabelLines($cleanLines);
 
         $brandResult = $this->extractBrand($cleanLines);
+
+        $expectedBrandResult = $this->findExpectedBrand(
+            $expected['brand'] ?? null,
+            $cleanLines
+        );
+        $result["expected_brand_found"] = $expectedBrandResult["found"];
+        $result["expected_brand_confidence"] = $expectedBrandResult["confidence"];
+        $result["expected_brand_match_type"] = $expectedBrandResult["match_type"];
+        $result["expected_brand_matched_text"] = $expectedBrandResult["matched_text"];
 
         // STEP 2: extract structured fields
         $result["abv"] = $this->extractAbv($cleanLines);
@@ -806,5 +820,276 @@ class LabelParser {
         return $flags;
     }
 
-    
+    private function normalizeOcrLine(string $line): string {
+        $line = strtoupper($line);
+
+        $replacements = [
+            'WHISKEY' => 'WHISKY',
+            'WH1SKY' => 'WHISKY',
+            'V0DKA' => 'VODKA',
+            'B0URBON' => 'BOURBON',
+            'TEQU1LA' => 'TEQUILA',
+            'L1QUEUR' => 'LIQUEUR',
+            'CORD1AL' => 'CORDIAL',
+            'FLAV0RED' => 'FLAVORED',
+            'FLAVOURED' => 'FLAVORED',
+            'FLAVOUR' => 'FLAVOR',
+            'FLAVOURS' => 'FLAVORS',
+            'CURAÇAO' => 'CURACAO',
+            'CRÈME' => 'CREME',
+        ];
+
+        $line = strtr($line, $replacements);
+
+        $line = preg_replace('/[^A-Z0-9%\.\/\-\s\'&]/', ' ', $line);
+        $line = preg_replace('/\s+/', ' ', $line);
+
+        return trim($line);
+    }
+
+    private function findExpectedBrand(?string $expectedBrand, array $lines): array {
+        if (!$expectedBrand || trim($expectedBrand) === '') {
+            return [
+                'found' => null,
+                'confidence' => 0,
+                'match_type' => null,
+                'matched_text' => null,
+            ];
+        }
+
+        $expectedRaw = $this->normalizeOcrLine($expectedBrand);
+        $expectedNormalized = $this->normalizeComparableText($expectedRaw);
+
+        if ($expectedNormalized === '') {
+            return [
+                'found' => null,
+                'confidence' => 0,
+                'match_type' => null,
+                'matched_text' => null,
+            ];
+        }
+
+        $best = [
+            'found' => false,
+            'confidence' => 0,
+            'match_type' => 'not_found',
+            'matched_text' => null,
+        ];
+
+        $searchWindows = $this->buildSearchWindows($lines);
+
+        foreach ($searchWindows as $window) {
+            $candidateRaw = $window['text'];
+            $candidateNormalized = $this->normalizeComparableText($candidateRaw);
+
+            if ($candidateNormalized === '') {
+                continue;
+            }
+
+            // 1. Exact normalized match.
+            if ($candidateNormalized === $expectedNormalized) {
+                return [
+                    'found' => true,
+                    'confidence' => 100,
+                    'match_type' => 'exact_normalized',
+                    'matched_text' => $candidateRaw,
+                ];
+            }
+
+            // 2. Expected brand appears inside a longer OCR line.
+            if (str_contains($candidateNormalized, $expectedNormalized)) {
+                $score = 95;
+
+                // Slightly reduce confidence if line is very long, because it may be legal copy.
+                if (strlen($candidateNormalized) > strlen($expectedNormalized) + 40) {
+                    $score -= 10;
+                }
+
+                if ($score > $best['confidence']) {
+                    $best = [
+                        'found' => true,
+                        'confidence' => $score,
+                        'match_type' => 'contained_in_line',
+                        'matched_text' => $candidateRaw,
+                    ];
+                }
+
+                continue;
+            }
+
+            // 3. Token containment: all important brand words appear.
+            $tokenScore = $this->brandTokenScore($expectedNormalized, $candidateNormalized);
+
+            if ($tokenScore >= 90 && $tokenScore > $best['confidence']) {
+                $best = [
+                    'found' => true,
+                    'confidence' => $tokenScore,
+                    'match_type' => 'token_match',
+                    'matched_text' => $candidateRaw,
+                ];
+            }
+
+            // 4. Fuzzy similarity for OCR damage.
+            similar_text($expectedNormalized, $candidateNormalized, $percent);
+
+            if ($percent >= 88 && $percent > $best['confidence']) {
+                $best = [
+                    'found' => true,
+                    'confidence' => (int) round($percent),
+                    'match_type' => 'fuzzy_match',
+                    'matched_text' => $candidateRaw,
+                ];
+            }
+        }
+
+        // Confidence interpretation:
+        // 90+ pass-worthy
+        // 75-89 review-worthy
+        // below 75 not found
+        if ($best['confidence'] >= 75) {
+            $best['found'] = true;
+        } else {
+            $best['found'] = false;
+        }
+
+        return $best;
+    }
+
+    private function buildSearchWindows(array $lines): array {
+        $windows = [];
+
+        foreach ($lines as $i => $line) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $windows[] = [
+                'text' => $line,
+                'start_line' => $i,
+                'end_line' => $i,
+            ];
+
+            // Two-line window: useful when OCR splits brand across lines.
+            if (isset($lines[$i + 1])) {
+                $twoLine = trim($line . ' ' . $lines[$i + 1]);
+
+                $windows[] = [
+                    'text' => $twoLine,
+                    'start_line' => $i,
+                    'end_line' => $i + 1,
+                ];
+            }
+
+            // Three-line window: useful for stacked brand names.
+            if (isset($lines[$i + 1], $lines[$i + 2])) {
+                $threeLine = trim($line . ' ' . $lines[$i + 1] . ' ' . $lines[$i + 2]);
+
+                $windows[] = [
+                    'text' => $threeLine,
+                    'start_line' => $i,
+                    'end_line' => $i + 2,
+                ];
+            }
+        }
+
+        return $windows;
+    }
+
+    private function normalizeComparableText(string $value): string {
+        $value = strtoupper($value);
+
+        // Normalize common OCR/punctuation variations.
+        $value = str_replace(['’', '`', '‘'], "'", $value);
+        $value = str_replace(['&'], ' AND ', $value);
+
+        // Remove punctuation that should not cause mismatch.
+        $value = preg_replace('/[^A-Z0-9\s]/', ' ', $value);
+
+        // Remove common corporate endings that may appear inconsistently.
+        $value = preg_replace('/\b(LLC|L L C|INC|CORP|CORPORATION|COMPANY|CO|LTD|LIMITED)\b/', ' ', $value);
+
+        // Remove weak brand noise words only for matching.
+        $value = preg_replace('/\b(DISTILLERY|BREWERY|WINERY|CELLARS|VINEYARDS|ESTATE)\b/', ' ', $value);
+
+        $value = preg_replace('/\s+/', ' ', $value);
+
+        return trim($value);
+    }
+
+    private function brandTokenScore(string $expectedNormalized, string $candidateNormalized): int {
+        $expectedTokens = $this->importantTokens($expectedNormalized);
+        $candidateTokens = $this->importantTokens($candidateNormalized);
+
+        if (count($expectedTokens) === 0 || count($candidateTokens) === 0) {
+            return 0;
+        }
+
+        $matched = 0;
+
+        foreach ($expectedTokens as $expectedToken) {
+            foreach ($candidateTokens as $candidateToken) {
+                if ($expectedToken === $candidateToken) {
+                    $matched++;
+                    break;
+                }
+
+                // Small OCR-tolerance for a token.
+                similar_text($expectedToken, $candidateToken, $percent);
+                if ($percent >= 88) {
+                    $matched++;
+                    break;
+                }
+            }
+        }
+
+        $coverage = $matched / count($expectedTokens);
+
+        // Penalize if candidate has many extra tokens.
+        $extraTokenPenalty = max(0, count($candidateTokens) - count($expectedTokens)) * 3;
+
+        $score = (int) round(($coverage * 100) - $extraTokenPenalty);
+
+        return max(0, min(100, $score));
+    }
+
+    private function importantTokens(string $value): array {
+        $tokens = preg_split('/\s+/', trim($value));
+
+        $stopWords = [
+            'THE',
+            'A',
+            'AN',
+            'OF',
+            'AND',
+            'BY',
+            'FROM',
+            'PRODUCT',
+            'BRAND',
+            'LABEL',
+        ];
+
+        $tokens = array_filter($tokens, function($token) use ($stopWords) {
+            return strlen($token) >= 2 && !in_array($token, $stopWords, true);
+        });
+
+        return array_values(array_unique($tokens));
+    }
+
+    private function evaluateExpectedBrandStatus(array $brandMatch): string {
+        if ($brandMatch['found'] === null) {
+            return 'review';
+        }
+
+        if ($brandMatch['confidence'] >= 90) {
+            return 'pass';
+        }
+
+        if ($brandMatch['confidence'] >= 75) {
+            return 'review';
+        }
+
+        return 'fail';
+    }
 }

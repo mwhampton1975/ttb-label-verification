@@ -26,8 +26,17 @@ $output = shell_exec($cmd);
 
 require_once __DIR__ . "/../src/LabelParser.php";
 
+$expected = [
+    'brand' => $_POST['expected_brand'] ?? null,
+    'class_type' => $_POST['expected_class_type'] ?? null,
+    'abv' => $_POST['expected_abv'] ?? null,
+    'net_contents' => $_POST['expected_net_contents'] ?? null,
+    'producer' => $_POST['expected_producer'] ?? null,
+    'country' => $_POST['expected_country'] ?? null,
+];
+
 $parser = new LabelParser();
-$parsed = $parser->parse($output);
+$parsed = $parser->parse($output, $expected);
 
 ?>
 
@@ -41,10 +50,13 @@ $parsed = $parser->parse($output);
 <h2>OCR Output</h2>
 
 <pre>
-    Debug output:<br>
+Application Data:
+<?php print_r($expected); ?>
+
+Parsed Result:
 <?php print_r($parsed); ?>
 </pre>
-
+<br><br>
 <pre>
 <?php echo $output; ?>
 </pre>
