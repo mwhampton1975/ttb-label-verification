@@ -20,7 +20,9 @@ The classification engine was intentionally designed
 as a data-driven rule system that can be expanded to
 cover the complete TTB classification catalog.
 
-The LLM is intentionally not the primary decision-maker. The rules engine is primary, and the LLM serves as an escalation path for ambiguous cases.
+This prototype handles obvious matches with local OCR and deterministic rules.
+It only invokes AI when the local result is ambiguous, low-confidence, or mismatched.
+The AI does not replace compliance agents. It explains edge cases and routes them to pass, fail, or review.
 
 LabelParser:
 Extracts fields and detects whether expected fields appear in OCR.
@@ -33,27 +35,42 @@ warning_partial_found = true but exact not found → review
 no warning evidence → fail
 
 Architecture
-Phase 1
---------
-OCR (Tesseract)
+1. User uploads label + enters application data
 
-Phase 2
---------
-Rule-based extraction
-TTB designation engine
+2. Tesseract OCR runs locally
 
-Phase 3
---------
-Application comparison engine
+3. LabelParser extracts:
+   - brand candidate
+   - expected brand found/not found
+   - class/type
+   - ABV
+   - net contents
+   - warning exact/partial/not found
+   - flags
+   - confidence values
 
-Phase 4
---------
-LLM adjudication only when:
-  - confidence < 80
-  - classification failed
-  - OCR ambiguity detected
-  - application mismatch found
+4. ApplicationComparator compares:
+   - expected brand vs OCR/parsed brand
+   - expected class/type vs parsed designation
+   - expected ABV vs parsed ABV
+   - expected net contents vs parsed net contents
+   - producer/country if available
 
-Phase 5
---------
-Agent review queue
+5. Decision gate:
+   - if all deterministic fields pass with high confidence → no AI call
+   - if anything fails/reviews/low confidence → call LLM
+
+6. LLM receives structured JSON only:
+   - expected application data
+   - OCR text
+   - parser output
+   - comparator output
+   - applicable rules summary
+
+7. LLM returns strict JSON:
+   - final_recommendation
+   - field decisions
+   - reasons
+   - whether human review is needed
+
+8. Store review item or display result
