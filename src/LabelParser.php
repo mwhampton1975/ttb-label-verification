@@ -860,8 +860,12 @@ class LabelParser {
             $flags[] = 'Classification confidence below 85.';
         }
 
-        if (empty($result['warning_found'])) {
-            $flags[] = 'Government warning not detected in OCR text.';
+        if (($result['warning_status'] ?? null) === 'fail') {
+            return 'fail';
+        }
+
+        if (($result['warning_status'] ?? null) === 'review') {
+            $flags[] = 'Government warning appears partially present but exact required text was not confirmed.';
         }
 
         //
@@ -913,7 +917,11 @@ class LabelParser {
     {
         $flags = [];
 
-        if (!$result["warning_found"]) {
+        if (!empty($result["warning_exact_found"])) {
+            // Exact warning found. No warning flag needed.
+        } elseif (!empty($result["warning_partial_found"])) {
+            $flags[] = "WARNING_PARTIAL_OR_UNREADABLE";
+        } else {
             $flags[] = "WARNING_NOT_FOUND";
         }
 

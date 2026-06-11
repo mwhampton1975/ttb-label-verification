@@ -28,6 +28,9 @@ Extracts fields and detects whether expected fields appear in OCR.
 ApplicationComparator:
 Compares expected vs parsed and decides field-level pass/fail/review in a cleaner report.
 
+Exact warning found = pass
+warning_partial_found = true but exact not found → review
+no warning evidence → fail
 
 Architecture
 Phase 1
