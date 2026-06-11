@@ -211,13 +211,6 @@ class LabelParser {
         $result["brand_confidence"] = $brandResult["confidence"];
 
         $result["flags"] = $this->evaluateRegulatoryFlags($result);
-        $result["flags"] = array_merge(
-            $result["flags"],
-            $this->evaluateFieldOfVision(
-                $cleanLines,
-                $result
-            )
-        );
         $result["status"] = $this->evaluateStatus($result);
 
         return $result;
@@ -593,7 +586,7 @@ class LabelParser {
 
         return match ($base) {
             'WHISKEY' => 'WHISKY',
-            default => $base
+            default => $base,
         };
     }
 
@@ -738,16 +731,8 @@ class LabelParser {
         }
 
         //
-        // New compliance checks
+        //  compliance checks
         //
-
-        if (in_array(
-            'POSSIBLE_FIELD_OF_VISION_VIOLATION',
-            $flags
-        )) {
-            $flags[] =
-                'Mandatory information may not appear in same field of vision.';
-        }
 
         if (
             in_array(
@@ -821,81 +806,5 @@ class LabelParser {
         return $flags;
     }
 
-    private function findLineNumber(
-        array $lines,
-        string $search
-    ): ?int
-    {
-        foreach ($lines as $i => $line) {
-
-            if (str_contains($line, $search)) {
-                return $i;
-            }
-        }
-
-        return null;
-    }
-
-    private function evaluateFieldOfVision(
-        array $lines,
-        array $result
-    ): array
-    {
-        $flags = [];
-
-        $brandLine = null;
-        $classLine = null;
-        $abvLine = null;
-
-        if (!empty($result["brand"])) {
-
-            foreach ($lines as $i => $line) {
-
-                if ($line === $result["brand"]) {
-                    $brandLine = $i;
-                    break;
-                }
-            }
-        }
-
-        if (!empty($result["type"])) {
-
-            foreach ($lines as $i => $line) {
-
-                if (str_contains($line, $result["type"])) {
-                    $classLine = $i;
-                    break;
-                }
-            }
-        }
-
-        foreach ($lines as $i => $line) {
-
-            if (preg_match('/\d+(?:\.\d+)?\s*%/', $line)) {
-
-                $abvLine = $i;
-                break;
-            }
-        }
-
-        $positions = array_filter([
-            $brandLine,
-            $classLine,
-            $abvLine
-        ], fn($v) => $v !== null);
-
-        if (count($positions) >= 2) {
-
-            $distance =
-                max($positions) - min($positions);
-
-            if ($distance > 10) {
-
-                $flags[] =
-                    "POSSIBLE_FIELD_OF_VISION_VIOLATION";
-            }
-        }
-
-        return $flags;
-    }
+    
 }
