@@ -30,6 +30,8 @@ class ApplicationComparator
 
         $results['country'] = $this->compareCountryOfOrigin($expected['country'] ?? null, $parsed);
 
+        $results['producer'] = $this->compareProducer($expected['producer'] ?? null, $parsed);
+
         $overall = $this->overallStatus($results);
 
         return [
@@ -358,6 +360,16 @@ class ApplicationComparator
             'found' => $parsed['country_found'] ?? null,
             'status' => $parsed['country_status'] ?? 'review',
             'reason' => $parsed['country_reason'] ?? 'Country of origin verification completed by parser.',
+        ];
+    }
+
+    private function compareProducer(?string $expected, array $parsed): array
+    {
+        return [
+            'expected' => $expected,
+            'found' => $parsed['producer_found'] ?? null,
+            'status' => $parsed['producer_status'] ?? 'review',
+            'reason' => $parsed['producer_reason'] ?? 'Producer/bottler verification completed by parser.',
         ];
     }
 }

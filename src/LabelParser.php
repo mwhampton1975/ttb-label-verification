@@ -175,6 +175,25 @@ class LabelParser {
             ],
             'min_abv' => 40,
         ],
+
+        'GIN' => [
+            'display' => 'GIN',
+            'aliases' => [
+                'GIN',
+                'LONDON DRY GIN',
+                'DISTILLED GIN',
+                'REDISTILLED GIN',
+                'COMPOUNDED GIN',
+            ],
+            'patterns' => [
+                '/\bLONDON\s+DRY\s+GIN\b/',
+                '/\bDISTILLED\s+GIN\b/',
+                '/\bREDISTILLED\s+GIN\b/',
+                '/\bCOMPOUNDED\s+GIN\b/',
+                '/\bGIN\b/',
+            ],
+            'min_abv' => 40,
+        ],
     ];
 
     public function parse($text, array $expected = []) {
@@ -211,6 +230,12 @@ class LabelParser {
             "warning_matched_fragments" => [],
             "warning_matched_text" => null,
             "warning_debug" => null,
+
+            "producer_status" => "review",
+            "producer_expected" => null,
+            "producer_found" => null,
+            "producer_confidence" => 0,
+            "producer_reason" => null,
 
             "country_status" => "review",
             "country_expected" => null,
@@ -268,6 +293,21 @@ class LabelParser {
 
         if (!empty($countryResult["flag"])) {
             $result["flags"][] = $countryResult["flag"];
+        }
+
+        $producerResult = $this->verifyProducerAddress(
+            $expected['producer'] ?? null,
+            $brandSearchLines
+        );
+
+        $result["producer_status"] = $producerResult["status"];
+        $result["producer_expected"] = $producerResult["expected"];
+        $result["producer_found"] = $producerResult["found"];
+        $result["producer_confidence"] = $producerResult["confidence"];
+        $result["producer_reason"] = $producerResult["reason"];
+
+        if (!empty($producerResult["flag"])) {
+            $result["flags"][] = $producerResult["flag"];
         }
 
         // STEP 2: extract structured fields
@@ -358,15 +398,30 @@ class LabelParser {
         return trim($line);
     }
 
-    private function extractAbv($lines) {
-        foreach ($lines as $line) {
-            if (preg_match('/\b(\d{1,3}(?:\.\d+)?)\s*%\s*(?:ALC(?:OHOL)?\.?\s*)?(?:BY\s+VOL(?:UME)?\.?|ABV)?\b/', $line, $m)) {
-                return $m[1] . "%";
-            }
+    private function extractAbv(array $lines): ?string
+    {
+        $text = strtoupper(implode(' ', $lines));
+        $text = preg_replace('/\s+/', ' ', $text);
 
-            if (preg_match('/\bALC\.?\s*(\d{1,3}(?:\.\d+)?)\s*%\s*VOL\.?\b/', $line, $m)) {
-                return $m[1] . "%";
-            }
+        // Strong pattern: 40% ALC/VOL, 40 % ALC. / VOL., etc.
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%\s*(?:ALC|ALCOHOL)\.?\s*\/?\s*(?:VOL|VOLUME)\.?/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        // Reverse pattern: ALC/VOL 40%
+        if (preg_match('/(?:ALC|ALCOHOL)\.?\s*\/?\s*(?:VOL|VOLUME)\.?\s*(\d+(?:\.\d+)?)\s*%/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        // ABV pattern: 40% ABV
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%\s*ABV\b/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        // Proof pattern: 80 PROOF = 40%
+        if (preg_match('/(\d+(?:\.\d+)?)\s*PROOF\b/', $text, $m)) {
+            $abv = ((float)$m[1]) / 2;
+            return rtrim(rtrim((string)$abv, '0'), '.') . '%';
         }
 
         return null;
@@ -1700,5 +1755,131 @@ class LabelParser {
         ];
 
         return $aliases[$countryNorm] ?? [];
+    }
+
+    private function verifyProducerAddress(?string $expectedProducer, array $lines): array
+    {
+        $expectedProducer = trim((string)$expectedProducer);
+
+        if ($expectedProducer === '') {
+            return [
+                'expected' => null,
+                'found' => null,
+                'status' => 'review',
+                'confidence' => 0,
+                'reason' => 'Producer/bottler address was not provided in application data.',
+                'flag' => 'PRODUCER_NOT_PROVIDED',
+            ];
+        }
+
+        $ocrText = $this->normalizeProducerText(implode(' ', $lines));
+        $expectedText = $this->normalizeProducerText($expectedProducer);
+
+        if ($expectedText === '') {
+            return [
+                'expected' => $expectedProducer,
+                'found' => null,
+                'status' => 'review',
+                'confidence' => 0,
+                'reason' => 'Producer/bottler address could not be normalized.',
+                'flag' => 'PRODUCER_REVIEW',
+            ];
+        }
+
+        // Exact normalized containment.
+        if (str_contains($ocrText, $expectedText)) {
+            return [
+                'expected' => $expectedProducer,
+                'found' => $expectedProducer,
+                'status' => 'pass',
+                'confidence' => 100,
+                'reason' => 'Producer/bottler address was found in OCR text.',
+                'flag' => null,
+            ];
+        }
+
+        // Token coverage fallback for OCR spacing errors like LAVERSTOKEMILL vs LAVERSTOKE MILL.
+        $expectedTokens = $this->importantProducerTokens($expectedText);
+        $matchedTokens = [];
+
+        foreach ($expectedTokens as $token) {
+            if (str_contains($ocrText, $token)) {
+                $matchedTokens[] = $token;
+            }
+        }
+
+        $coverage = count($expectedTokens) > 0
+            ? count($matchedTokens) / count($expectedTokens)
+            : 0;
+
+        if ($coverage >= 0.75) {
+            return [
+                'expected' => $expectedProducer,
+                'found' => implode(', ', $matchedTokens),
+                'status' => 'pass',
+                'confidence' => (int)round($coverage * 100),
+                'reason' => 'Producer/bottler address was substantially found in OCR text.',
+                'flag' => null,
+            ];
+        }
+
+        if ($coverage >= 0.45) {
+            return [
+                'expected' => $expectedProducer,
+                'found' => implode(', ', $matchedTokens),
+                'status' => 'review',
+                'confidence' => (int)round($coverage * 100),
+                'reason' => 'Producer/bottler address was partially found in OCR text. Human review recommended.',
+                'flag' => 'PRODUCER_PARTIAL_MATCH',
+            ];
+        }
+
+        return [
+            'expected' => $expectedProducer,
+            'found' => null,
+            'status' => 'fail',
+            'confidence' => 0,
+            'reason' => 'Producer/bottler address was provided in application data but was not found in OCR text.',
+            'flag' => 'PRODUCER_NOT_FOUND',
+        ];
+    }
+
+    private function normalizeProducerText(string $text): string
+    {
+        $text = strtoupper($text);
+        $text = str_replace('&', ' AND ', $text);
+        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        return trim($text);
+    }
+
+    private function importantProducerTokens(string $text): array
+    {
+        $tokens = preg_split('/\s+/', $text);
+
+        $stopWords = [
+            'THE', 'A', 'AN', 'BY', 'OF', 'AND',
+            'BOTTLED', 'PRODUCED', 'DISTILLED',
+            'COMPANY', 'CO', 'INC', 'LLC', 'LTD',
+        ];
+
+        $important = [];
+
+        foreach ($tokens as $token) {
+            $token = trim($token);
+
+            if ($token === '' || strlen($token) < 3) {
+                continue;
+            }
+
+            if (in_array($token, $stopWords, true)) {
+                continue;
+            }
+
+            $important[] = $token;
+        }
+
+        return array_values(array_unique($important));
     }
 }
