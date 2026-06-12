@@ -37,6 +37,8 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
 
     function buildCompactLlmInput(array $expected, array $parsed, array $comparison): array
     {
+        $fields = $comparison['fields'] ?? [];
+        
         return [
             'application_data' => [
                 'brand' => $expected['brand'] ?? null,
@@ -128,18 +130,14 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
         $fieldsToCheck = ['brand', 'producer'];
 
         foreach ($fieldsToCheck as $field) {
-            $overrideKey = $field . '_override';
-            $statusKey = $field . '_status';
-            $confidenceKey = $field . '_confidence';
-            $reasonKey = $field . '_reason';
-
-            if (empty($llmResult[$overrideKey])) {
-                continue;
-            }
-
             if (!isset($comparison['fields'][$field])) {
                 continue;
             }
+
+            $statusKey = $field . '_status';
+            $confidenceKey = $field . '_confidence';
+            $reasonKey = $field . '_reason';
+            $overrideKey = $field . '_override';
 
             $newStatus = $llmResult[$statusKey] ?? null;
             $confidence = (int)($llmResult[$confidenceKey] ?? 0);
@@ -149,12 +147,33 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
                 continue;
             }
 
-            if ($newStatus === 'pass' && $confidence < 90) {
-                $newStatus = 'review';
-                $reason .= ' Confidence was below the pass threshold, so the field remains review.';
+            $originalStatus = $comparison['fields'][$field]['status'] ?? 'review';
+
+            /*
+            * Apply if the model explicitly requested an override,
+            * or if the model recommends a different soft-field status.
+            */
+            $shouldApply = !empty($llmResult[$overrideKey]) || $newStatus !== $originalStatus;
+
+            if (!$shouldApply) {
+                continue;
             }
 
-            $originalStatus = $comparison['fields'][$field]['status'] ?? 'review';
+            /*
+            * Require high confidence for pass.
+            * Lower-confidence pass becomes review.
+            */
+            if ($newStatus === 'pass' && $confidence < 90) {
+                $newStatus = 'review';
+                $reason .= ' Confidence was below the pass threshold, so the field was set to review instead of pass.';
+            }
+
+            /*
+            * Do not let the LLM downgrade an existing pass.
+            */
+            if ($originalStatus === 'pass' && $newStatus !== 'pass') {
+                continue;
+            }
 
             $comparison['fields'][$field]['status'] = $newStatus;
             $comparison['fields'][$field]['reason'] =
@@ -430,27 +449,39 @@ $llmEnabled = $llmResult['enabled'] ?? null;
             </tbody>
         </table>
 
-        <?php if (!empty($llmResult['field_results']) && is_array($llmResult['field_results'])): ?>
-            <h3>LLM Field Results</h3>
+        <?php if ($llmExecuted && is_array($llmResult)): ?>
+            <h3>LLM Soft Field Review</h3>
 
             <table>
                 <thead>
                     <tr>
                         <th>Field</th>
-                        <th>Status</th>
+                        <th>Override</th>
+                        <th>LLM Status</th>
+                        <th>Confidence</th>
                         <th>Reason</th>
-                        <th>Evidence</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($llmResult['field_results'] as $fieldName => $field): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars((string)$fieldName); ?></td>
-                            <td><strong><?php echo strtoupper(htmlspecialchars((string)($field['status'] ?? 'review'))); ?></strong></td>
-                            <td><?php echo htmlspecialchars((string)($field['reason'] ?? '')); ?></td>
-                            <td><?php echo htmlspecialchars((string)($field['evidence'] ?? '')); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
+                    <tr>
+                        <td>Brand</td>
+                        <td><?php echo !empty($llmResult['brand_override']) ? 'Yes' : 'No'; ?></td>
+                        <td class="<?php echo statusClass($llmResult['brand_status'] ?? 'review'); ?>">
+                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['brand_status'] ?? ''))); ?>
+                        </td>
+                        <td><?php echo htmlspecialchars((string)($llmResult['brand_confidence'] ?? '')); ?></td>
+                        <td><?php echo htmlspecialchars((string)($llmResult['brand_reason'] ?? '')); ?></td>
+                    </tr>
+
+                    <tr>
+                        <td>Producer</td>
+                        <td><?php echo !empty($llmResult['producer_override']) ? 'Yes' : 'No'; ?></td>
+                        <td class="<?php echo statusClass($llmResult['producer_status'] ?? 'review'); ?>">
+                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['producer_status'] ?? ''))); ?>
+                        </td>
+                        <td><?php echo htmlspecialchars((string)($llmResult['producer_confidence'] ?? '')); ?></td>
+                        <td><?php echo htmlspecialchars((string)($llmResult['producer_reason'] ?? '')); ?></td>
+                    </tr>
                 </tbody>
             </table>
         <?php endif; ?>

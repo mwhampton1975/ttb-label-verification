@@ -140,6 +140,8 @@ Soft-field rules:
 - Use review when plausible but uncertain.
 - Use fail when OCR evidence does not support the expected value.
 
+Set brand_override or producer_override to true when your recommended status differs from the rule-based status, or when your review should replace the rule-based soft-field result. Set it to false only when the rule-based result should remain unchanged.
+
 Return exactly this JSON shape:
 {
   "final_recommendation": "pass|review|fail",
