@@ -1,6 +1,8 @@
 <?php
 
 $sampleMap = [
+    '12345_rum_liqueur.jpg' => __DIR__ . '/../samples/12345_rum_liqueur.jpg',
+    'abc_whisky.jpg' => __DIR__ . '/../samples/abc_whisky.jpg',
     'bombay_sapphire.jpg' => __DIR__ . '/../samples/bombay_sapphire.jpg',
     'hawks_shadow.jpg' => __DIR__ . '/../samples/hawks_shadow.jpg',
     'stormchaser.jpg' => __DIR__ . '/../samples/stormchaser.jpg',

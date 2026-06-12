@@ -22,17 +22,6 @@ $samples = [
         'country' => '',
         'notes' => 'Demonstrates whisky class/type evidence, and government warning validation strictness.',
     ],
-    'bombay_sapphire' => [
-        'label' => 'Bombay Sapphire Gin',
-        'image' => 'bombay_sapphire.jpg',
-        'brand' => 'BOMBAY SAPPHIRE',
-        'class_type' => 'GIN',
-        'abv' => '40',
-        'net_contents' => '700 ML',
-        'producer' => 'The Bombay Sapphire Distillery Laverstoke Mill, RG28 7NR, UK',
-        'country' => 'England',
-        'notes' => 'Demonstrates gin class/type evidence, imported-product country handling, and OCR noise.',
-    ],
     'stormchaser' => [
         'label' => 'Stormchaser Chardonnay',
         'image' => 'stormchaser.jpg',
@@ -87,6 +76,17 @@ $samples = [
         'producer' => 'Hawk’s Shadow Estate Dripping Springs, Texas',
         'country' => '',
         'notes' => 'Demonstrates limitations of curved images using actual bottle photos with blured edges.',
+    ],
+    'bombay_sapphire' => [
+        'label' => 'Bombay Sapphire Gin',
+        'image' => 'bombay_sapphire.jpg',
+        'brand' => 'BOMBAY SAPPHIRE',
+        'class_type' => 'GIN',
+        'abv' => '40',
+        'net_contents' => '700 ML',
+        'producer' => 'The Bombay Sapphire Distillery Laverstoke Mill, RG28 7NR, UK',
+        'country' => 'England',
+        'notes' => 'Demonstrates gin class/type evidence, imported-product country handling, and OCR noise.',
     ],
 ];
 ?>
