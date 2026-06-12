@@ -237,6 +237,19 @@
         </div>
     </fieldset>
 
+    <fieldset>
+        <legend>Debug Output</legend>
+
+        <label class="checkbox-label">
+            <input type="checkbox" name="show_debug" value="1">
+            <span>Show debug output</span>
+        </label>
+
+        <p class="hint">
+            Shows raw OCR text, parser output, comparison arrays, LLM raw results, and timing details.
+        </p>
+    </fieldset>
+
     <button type="submit">Verify Label</button>
 </form>
 

@@ -38,7 +38,7 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
     function buildCompactLlmInput(array $expected, array $parsed, array $comparison): array
     {
         $fields = $comparison['fields'] ?? [];
-        
+
         return [
             'application_data' => [
                 'brand' => $expected['brand'] ?? null,
@@ -247,6 +247,8 @@ $expected = [
     'country' => $_POST['expected_country'] ?? null,
 ];
 
+$showDebug = !empty($_POST['show_debug']);
+
 if (empty(trim((string)($expected['class_type'] ?? '')))) {
     die("Class / Type is required.");
 }
@@ -291,62 +293,129 @@ $totalDuration = microtime(true) - $processStartedAt;
             max-width: 1100px;
             margin: 30px auto;
             line-height: 1.4;
+            color: #222;
+            background: #fafafa;
         }
 
-        pre {
-            background: #f5f5f5;
-            padding: 15px;
-            overflow-x: auto;
+        h1, h2, h3 {
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: #fff;
             border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 22px;
         }
 
         .status {
-            padding: 10px 14px;
-            margin-bottom: 20px;
-            border-radius: 4px;
+            padding: 12px 14px;
+            border-radius: 5px;
+            margin-bottom: 12px;
             font-weight: bold;
         }
 
         .pass {
             background: #e8f5e9;
-            border: 1px solid #a5d6a7;
             color: #1b5e20;
+            border: 1px solid #a5d6a7;
         }
 
         .review {
             background: #fff8e1;
-            border: 1px solid #ffe082;
             color: #7a5200;
+            border: 1px solid #ffe082;
         }
 
         .fail {
-            background: #ffebee;
-            border: 1px solid #ef9a9a;
-            color: #b71c1c;
+            background: #fdecea;
+            color: #8a1c1c;
+            border: 1px solid #f5b5ae;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 25px;
+            background: #fff;
+            margin-top: 12px;
         }
 
         th, td {
-            text-align: left;
-            vertical-align: top;
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 10px;
+            vertical-align: top;
+            text-align: left;
         }
 
         th {
-            background: #f0f0f0;
+            background: #f3f3f3;
+        }
+
+        tr.pass td {
+            background: #e8f5e9;
+        }
+
+        tr.review td {
+            background: #fff8e1;
+        }
+
+        tr.fail td {
+            background: #fdecea;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge.pass {
+            background: #c8e6c9;
+            color: #1b5e20;
+            border: 1px solid #81c784;
+        }
+
+        .badge.review {
+            background: #ffecb3;
+            color: #7a5200;
+            border: 1px solid #ffd54f;
+        }
+
+        .badge.fail {
+            background: #ffcdd2;
+            color: #8a1c1c;
+            border: 1px solid #ef9a9a;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 14px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        .meta {
+            color: #555;
+            font-size: 0.95em;
+        }
+
+        .debug-section {
+            margin-top: 26px;
         }
     </style>
 </head>
 <body>
 
 <h1>Alcohol Label Verification Result</h1>
-<p><strong>Total processing duration:</strong> <?php echo number_format($totalDuration, 2); ?> seconds</p>
+<?php if ($showDebug): ?>
+    <p><strong>Total processing duration:</strong> <?php echo number_format($totalDuration, 2); ?> seconds</p>
+<?php endif; ?>
 <div class="status <?php echo htmlspecialchars($comparison['overall_status']); ?>">
     Overall Rule-Based Status:
     <?php echo strtoupper(htmlspecialchars($comparison['overall_status'])); ?>
@@ -358,28 +427,33 @@ $llmProvider = $llmResult['provider'] ?? null;
 $llmEnabled = $llmResult['enabled'] ?? null;
 ?>
 
-<div class="status <?php echo $llmRequested ? ($llmRecommendedByRules ? 'review' : 'pass') : 'review'; ?>">
-    LLM Adjudication:
-    <?php if (!$llmRequested): ?>
-        Disabled for this run.
-    <?php elseif (!$llmRecommendedByRules): ?>
-        Enabled, but not needed based on rule-based checks.
-    <?php else: ?>
-        Enabled and recommended for ambiguous / low-confidence review.
-    <?php endif; ?>
-</div>
+<?php if ($showDebug): ?>
+    <div class="debug-section">
+        <div class="status <?php echo $llmRequested ? ($llmRecommendedByRules ? 'review' : 'pass') : 'review'; ?>">
+            LLM Adjudication:
+            <?php if (!$llmRequested): ?>
+                Disabled for this run.
+            <?php elseif (!$llmRecommendedByRules): ?>
+                Enabled, but not needed based on rule-based checks.
+            <?php else: ?>
+                Enabled and recommended for ambiguous / low-confidence review.
+            <?php endif; ?>
+        </div>
 
-<?php if ($llmExecuted): ?>
-    <div class="status <?php echo statusClass($llmFinal ?? 'review'); ?>">
-        LLM Adjudication Result:
-        <?php echo strtoupper(htmlspecialchars((string)($llmFinal ?? 'not returned'))); ?>
-        <?php if ($llmProvider): ?>
-            via <?php echo htmlspecialchars((string)$llmProvider); ?>
+        <?php if ($llmExecuted): ?>
+            <div class="status <?php echo statusClass($llmFinal ?? 'review'); ?>">
+                LLM Adjudication Result:
+                <?php echo strtoupper(htmlspecialchars((string)($llmFinal ?? 'not returned'))); ?>
+                <?php if ($llmProvider): ?>
+                    via <?php echo htmlspecialchars((string)$llmProvider); ?>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($llmDuration !== null && $showDebug): ?>
+                <p><strong>LLM duration:</strong> <?php echo number_format($llmDuration, 2); ?> seconds</p>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
-    <?php if ($llmDuration !== null): ?>
-        <p><strong>LLM duration:</strong> <?php echo number_format($llmDuration, 2); ?> seconds</p>
-    <?php endif; ?>
 <?php endif; ?>
 
 <h2>Field Comparison</h2>
@@ -396,21 +470,41 @@ $llmEnabled = $llmResult['enabled'] ?? null;
     </thead>
     <tbody>
         <?php foreach ($comparison['fields'] as $fieldName => $field): ?>
-            <tr>
+            <?php
+            $fieldStatus = $field['status'] ?? 'review';
+            $fieldStatusClass = statusClass($fieldStatus);
+            ?>
+            <tr class="<?php echo $fieldStatusClass; ?>">
                 <td><?php echo htmlspecialchars($fieldName); ?></td>
                 <td>
-                    <strong><?php echo strtoupper(htmlspecialchars($field['status'] ?? 'review')); ?></strong>
+                    <span class="badge <?php echo $fieldStatusClass; ?>">
+                        <?php echo strtoupper(htmlspecialchars((string)$fieldStatus)); ?>
+                    </span>
                 </td>
                 <td><?php echo htmlspecialchars((string)($field['expected'] ?? '')); ?></td>
                 <td><?php echo htmlspecialchars((string)($field['found'] ?? '')); ?></td>
-                <td><?php echo htmlspecialchars((string)($field['reason'] ?? '')); ?></td>
+                <td>
+                    <?php echo htmlspecialchars((string)($field['reason'] ?? '')); ?>
+
+                    <?php if (!empty($field['llm_override_applied'])): ?>
+                        <br>
+                        <small>
+                            LLM-assisted soft-field review applied
+                            <?php if (isset($field['llm_confidence'])): ?>
+                                at <?php echo htmlspecialchars((string)$field['llm_confidence']); ?>% confidence.
+                            <?php else: ?>
+                                .
+                            <?php endif; ?>
+                        </small>
+                    <?php endif; ?>
+                </td>
             </tr>
         <?php endforeach; ?>
     </tbody>
 </table>
 
-<?php if ($llmExecuted): ?>
-    <h2>LLM Adjudication</h2>
+<?php if ($showDebug && $llmExecuted): ?>
+    <h2>LLM Debug</h2>
 
     <?php if ($llmResult === null): ?>
         <pre>LLM was recommended, but no LLM result was returned.</pre>
@@ -432,59 +526,65 @@ $llmEnabled = $llmResult['enabled'] ?? null;
                 </tr>
                 <tr>
                     <th>Final Recommendation</th>
-                    <td><strong><?php echo strtoupper(htmlspecialchars((string)($llmResult['final_recommendation'] ?? 'not returned'))); ?></strong></td>
-                </tr>
-                <tr>
-                    <th>Confidence</th>
-                    <td><?php echo htmlspecialchars((string)($llmResult['confidence'] ?? '')); ?></td>
+                    <td>
+                        <strong>
+                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['final_recommendation'] ?? 'not returned'))); ?>
+                        </strong>
+                    </td>
                 </tr>
                 <tr>
                     <th>Human Review Required</th>
                     <td><?php echo htmlspecialchars(var_export($llmResult['human_review_required'] ?? null, true)); ?></td>
                 </tr>
-                <tr>
-                    <th>Summary</th>
-                    <td><?php echo htmlspecialchars((string)($llmResult['summary'] ?? '')); ?></td>
-                </tr>
             </tbody>
         </table>
 
-        <?php if ($llmExecuted && is_array($llmResult)): ?>
-            <h3>LLM Soft Field Review</h3>
+        <h3>LLM Soft Field Review</h3>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Field</th>
-                        <th>Override</th>
-                        <th>LLM Status</th>
-                        <th>Confidence</th>
-                        <th>Reason</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Brand</td>
-                        <td><?php echo !empty($llmResult['brand_override']) ? 'Yes' : 'No'; ?></td>
-                        <td class="<?php echo statusClass($llmResult['brand_status'] ?? 'review'); ?>">
-                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['brand_status'] ?? ''))); ?>
-                        </td>
-                        <td><?php echo htmlspecialchars((string)($llmResult['brand_confidence'] ?? '')); ?></td>
-                        <td><?php echo htmlspecialchars((string)($llmResult['brand_reason'] ?? '')); ?></td>
-                    </tr>
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Override</th>
+                    <th>LLM Status</th>
+                    <th>Confidence</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                $brandLlmStatus = $llmResult['brand_status'] ?? 'review';
+                $brandLlmClass = statusClass($brandLlmStatus);
 
-                    <tr>
-                        <td>Producer</td>
-                        <td><?php echo !empty($llmResult['producer_override']) ? 'Yes' : 'No'; ?></td>
-                        <td class="<?php echo statusClass($llmResult['producer_status'] ?? 'review'); ?>">
-                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['producer_status'] ?? ''))); ?>
-                        </td>
-                        <td><?php echo htmlspecialchars((string)($llmResult['producer_confidence'] ?? '')); ?></td>
-                        <td><?php echo htmlspecialchars((string)($llmResult['producer_reason'] ?? '')); ?></td>
-                    </tr>
-                </tbody>
-            </table>
-        <?php endif; ?>
+                $producerLlmStatus = $llmResult['producer_status'] ?? 'review';
+                $producerLlmClass = statusClass($producerLlmStatus);
+                ?>
+
+                <tr class="<?php echo $brandLlmClass; ?>">
+                    <td>Brand</td>
+                    <td><?php echo !empty($llmResult['brand_override']) ? 'Yes' : 'No'; ?></td>
+                    <td>
+                        <span class="badge <?php echo $brandLlmClass; ?>">
+                            <?php echo strtoupper(htmlspecialchars((string)$brandLlmStatus)); ?>
+                        </span>
+                    </td>
+                    <td><?php echo htmlspecialchars((string)($llmResult['brand_confidence'] ?? '')); ?></td>
+                    <td><?php echo htmlspecialchars((string)($llmResult['brand_reason'] ?? '')); ?></td>
+                </tr>
+
+                <tr class="<?php echo $producerLlmClass; ?>">
+                    <td>Producer</td>
+                    <td><?php echo !empty($llmResult['producer_override']) ? 'Yes' : 'No'; ?></td>
+                    <td>
+                        <span class="badge <?php echo $producerLlmClass; ?>">
+                            <?php echo strtoupper(htmlspecialchars((string)$producerLlmStatus)); ?>
+                        </span>
+                    </td>
+                    <td><?php echo htmlspecialchars((string)($llmResult['producer_confidence'] ?? '')); ?></td>
+                    <td><?php echo htmlspecialchars((string)($llmResult['producer_reason'] ?? '')); ?></td>
+                </tr>
+            </tbody>
+        </table>
 
         <?php if (!empty($llmResult['review_notes'])): ?>
             <h3>LLM Review Notes</h3>
@@ -495,24 +595,28 @@ $llmEnabled = $llmResult['enabled'] ?? null;
             </ul>
         <?php endif; ?>
 
+        <h3>LLM Raw Result</h3>
+        <pre><?php echo htmlspecialchars(print_r($llmResult, true)); ?></pre>
+
     <?php endif; ?>
 <?php endif; ?>
 
-<h2>Application Data</h2>
-<pre><?php print_r($expected); ?></pre>
+<?php if ($showDebug): ?>
+    <h2>Application Data</h2>
+    <pre><?php print_r($expected); ?></pre>
 
-<h2>Parsed Result</h2>
-<pre><?php print_r($parsed); ?></pre>
+    <h2>Parsed Result</h2>
+    <pre><?php print_r($parsed); ?></pre>
 
-<h2>Comparison Result</h2>
-<pre><?php print_r($comparison); ?></pre>
+    <h2>Comparison Result</h2>
+    <pre><?php print_r($comparison); ?></pre>
 
-<h2>LLM Raw Result</h2>
-<pre><?php print_r($llmResult); ?></pre>
+    <h2>LLM Raw Result</h2>
+    <pre><?php print_r($llmResult); ?></pre>
 
-<h2>Raw OCR Output</h2>
-<pre><?php echo htmlspecialchars($output); ?></pre>
-
+    <h2>Raw OCR Output</h2>
+    <pre><?php echo htmlspecialchars($output); ?></pre>
+<?php endif; ?>
 <br>
 <a href="index.php">← Back</a>
 
