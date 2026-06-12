@@ -114,26 +114,51 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
         $json = json_encode($input, JSON_UNESCAPED_SLASHES);
 
         return <<<PROMPT
-You are reviewing a structured alcohol label verification result.
+You are reviewing OCR-tolerant soft-field failures in an alcohol label verification prototype.
 
-Use only the provided rule-based field results and parser evidence.
-Do not invent text.
+Use only the provided data.
+Do not invent label text.
 Do not re-run OCR.
-Do not override exact-match requirements.
-Government warning can pass only if exact_found is true.
+Do not make legal conclusions.
 
-Decision rules:
-- If any required field is fail, final_recommendation is fail.
-- If no fields fail but any field is review, final_recommendation is review.
-- If all required fields pass, final_recommendation is pass.
+You may review only these soft fields:
+- brand
+- producer
+
+You may not upgrade these hard fields:
+- class_type
+- abv
+- net_contents
+- government_warning
+- country
+
+Soft-field upgrade rules:
+- Upgrade a soft field to pass only when the OCR evidence is clearly the same as the expected value despite minor OCR errors.
+- Treat casing, line breaks, stray punctuation, slashes, and random short noise tokens as insignificant.
+- Common OCR spelling errors may be tolerated when the value remains clearly identifiable.
+- Use pass only if similarity is approximately 90% or higher.
+- Use review if the match is plausible but uncertain.
+- Use fail if the OCR evidence does not reasonably support the expected value.
 
 Return only compact valid JSON:
 {
   "final_recommendation": "pass|review|fail",
-  "confidence": 0,
+  "soft_field_overrides": {
+    "brand": {
+      "override": true,
+      "status": "pass|review|fail",
+      "confidence": 0,
+      "reason": ""
+    },
+    "producer": {
+      "override": true,
+      "status": "pass|review|fail",
+      "confidence": 0,
+      "reason": ""
+    }
+  },
   "summary": "",
-  "human_review_required": true,
-  "review_notes": []
+  "human_review_required": true
 }
 
 Input:

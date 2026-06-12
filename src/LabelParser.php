@@ -532,6 +532,7 @@ class LabelParser {
             "producer_found" => null,
             "producer_confidence" => 0,
             "producer_reason" => null,
+            "producer_debug_window" =>null,
 
             "country_status" => "review",
             "country_expected" => null,
@@ -601,6 +602,7 @@ class LabelParser {
         $result["producer_found"] = $producerResult["found"];
         $result["producer_confidence"] = $producerResult["confidence"];
         $result["producer_reason"] = $producerResult["reason"];
+        $result["producer_debug_window"] = $producerResult["debug_window"] ?? null;
 
         if (!empty($producerResult["flag"])) {
             $result["flags"][] = $producerResult["flag"];
@@ -786,6 +788,38 @@ class LabelParser {
         foreach ($patterns as $pattern) {
             if (preg_match($pattern, $text, $m)) {
                 return trim(preg_replace('/\s+/', ' ', $m[0]));
+            }
+        }
+
+        return null;
+    }
+
+    private function findProducerEvidenceWindow(array $lines): ?string
+    {
+        $keywords = [
+            'PRODUCED',
+            'BOTTLED',
+            'DISTILLED',
+            'VINTNER',
+            'VINTNERS',
+            'WINERY',
+            'BREWERY',
+            'DISTILLERY',
+            'CELLARS',
+        ];
+
+        $count = count($lines);
+
+        for ($i = 0; $i < $count; $i++) {
+            $lineNorm = $this->normalizeProducerText($lines[$i]);
+
+            foreach ($keywords as $keyword) {
+                if (str_contains($lineNorm, $keyword)) {
+                    $start = max(0, $i - 1);
+                    $end = min($count - 1, $i + 4);
+
+                    return implode("\n", array_slice($lines, $start, $end - $start + 1));
+                }
             }
         }
 
@@ -2099,6 +2133,7 @@ class LabelParser {
     private function verifyProducerAddress(?string $expectedProducer, array $lines): array
     {
         $expectedProducer = trim((string)$expectedProducer);
+        $evidenceWindow = $this->findProducerEvidenceWindow($lines);
 
         if ($expectedProducer === '') {
             return [
@@ -2106,6 +2141,7 @@ class LabelParser {
                 'found' => null,
                 'status' => 'review',
                 'confidence' => 0,
+                'debug_window' => $evidenceWindow,
                 'reason' => 'Producer/bottler address was not provided in application data.',
                 'flag' => 'PRODUCER_NOT_PROVIDED',
             ];
@@ -2120,6 +2156,7 @@ class LabelParser {
                 'found' => null,
                 'status' => 'review',
                 'confidence' => 0,
+                'debug_window' => $evidenceWindow,
                 'reason' => 'Producer/bottler address could not be normalized.',
                 'flag' => 'PRODUCER_REVIEW',
             ];
@@ -2132,6 +2169,7 @@ class LabelParser {
                 'found' => $expectedProducer,
                 'status' => 'pass',
                 'confidence' => 100,
+                'debug_window' => $evidenceWindow,
                 'reason' => 'Producer/bottler address was found in OCR text.',
                 'flag' => null,
             ];

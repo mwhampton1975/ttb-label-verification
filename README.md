@@ -110,7 +110,18 @@ The core workflow remains local OCR, structured parsing, deterministic compariso
 
 The deterministic OCR + rules workflow is the primary path and is designed for fast processing. Bedrock adjudication is optional, disabled by default, and only used for ambiguous or low-confidence cases. Because Bedrock adds network and model latency, it is treated as an explanation/review assist layer rather than part of the required fast path.
 
+The deterministic engine handles required compliance fields.
+The LLM assists with OCR-noise judgment on human-readable identity fields.
+Hard regulatory values remain deterministic and conservative.
+
+1. LabelParser extracts evidence.
+2. ApplicationComparator produces pass/review/fail.
+3. Optional LLM reviews only selected soft-field failures.
+4. Final result may upgrade soft fields from fail to review/pass with an explanation.
+
 For wine varietals such as Chardonnay, Muscat, or Riesling, the prototype verifies that the expected varietal designation appears in OCR text, but it does not validate grape-source percentages, appellation requirements, or foreign-country approval rules.
+
+
 
 Limitations:
 OCR fails to read white text on dark backgrounds

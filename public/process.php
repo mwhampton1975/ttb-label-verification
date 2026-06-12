@@ -10,116 +10,184 @@ require_once __DIR__ . "/../src/Llm/NullLlmAdjudicator.php";
 require_once __DIR__ . "/../src/Llm/BedrockAdjudicator.php";
 require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
 
-function shouldUseLlm(array $parsed, array $comparison): bool
-{
-    if (($parsed['classification_confidence'] ?? 0) < 80) {
-        return true;
+    function shouldUseLlm(array $parsed, array $comparison): bool
+    {
+        if (($parsed['classification_confidence'] ?? 0) < 80) {
+            return true;
+        }
+
+        if (($parsed['warning_status'] ?? null) !== 'pass') {
+            return true;
+        }
+
+        if (!empty($parsed['needs_review'])) {
+            return true;
+        }
+
+        if (!empty($parsed['flags'])) {
+            return true;
+        }
+
+        if (($comparison['overall_status'] ?? null) !== 'pass') {
+            return true;
+        }
+
+        return false;
     }
 
-    if (($parsed['warning_status'] ?? null) !== 'pass') {
-        return true;
+    function buildCompactLlmInput(array $expected, array $parsed, array $comparison): array
+    {
+        return [
+            'application_data' => [
+                'brand' => $expected['brand'] ?? null,
+                'class_type' => $expected['class_type'] ?? null,
+                'abv' => $expected['abv'] ?? null,
+                'net_contents' => $expected['net_contents'] ?? null,
+                'producer' => $expected['producer'] ?? null,
+                'country' => $expected['country'] ?? null,
+            ],
+
+            'rule_based_result' => [
+                'overall_status' => $comparison['overall_status'] ?? 'review',
+                'fields' => $comparison['fields'] ?? [],
+            ],
+
+            'parser_evidence' => [
+                'brand' => [
+                    'matched_text' => $parsed['expected_brand_matched_text'] ?? null,
+                    'confidence' => $parsed['expected_brand_confidence'] ?? null,
+                    'match_type' => $parsed['expected_brand_match_type'] ?? null,
+                ],
+                'class_type' => [
+                    'designation' => $parsed['designation'] ?? null,
+                    'matched_text' => $parsed['matched_text'] ?? null,
+                    'confidence' => $parsed['classification_confidence'] ?? null,
+                    'status' => $parsed['class_type_status'] ?? null,
+                    'reason' => $parsed['class_type_reason'] ?? null,
+                ],
+                'abv' => [
+                    'found' => $parsed['abv'] ?? null,
+                ],
+                'net_contents' => [
+                    'found' => $parsed['net_contents'] ?? null,
+                ],
+                'producer' => [
+                    'found' => $parsed['producer_found'] ?? null,
+                    'confidence' => $parsed['producer_confidence'] ?? null,
+                    'reason' => $parsed['producer_reason'] ?? null,
+                ],
+                'country' => [
+                    'found' => $parsed['country_found'] ?? null,
+                    'confidence' => $parsed['country_confidence'] ?? null,
+                    'reason' => $parsed['country_reason'] ?? null,
+                ],
+                'government_warning' => [
+                    'status' => $parsed['warning_status'] ?? null,
+                    'exact_found' => $parsed['warning_exact_found'] ?? null,
+                    'partial_found' => $parsed['warning_partial_found'] ?? null,
+                    'matched_text' => $parsed['warning_matched_text'] ?? null,
+                    'confidence' => $parsed['warning_confidence'] ?? null,
+                ],
+                'flags' => $parsed['flags'] ?? [],
+            ],
+
+            'adjudication_rules' => [
+                'Do not invent label text.',
+                'Do not re-run OCR.',
+                'Use the existing field results and parser evidence only.',
+                'If any field is fail, final recommendation should be fail unless the failure is clearly a parser limitation.',
+                'If any field is review and none fail, final recommendation should be review.',
+                'Only return pass when all required fields pass.',
+                'Government warning requires exact confirmation to pass.',
+            ],
+        ];
     }
 
-    if (!empty($parsed['needs_review'])) {
-        return true;
+    function statusClass(?string $status): string
+    {
+        $status = strtolower((string) $status);
+
+        return in_array($status, ['pass', 'review', 'fail'], true)
+            ? $status
+            : 'review';
     }
 
-    if (!empty($parsed['flags'])) {
-        return true;
+    function renderValue(mixed $value): string
+    {
+        if (is_array($value) || is_object($value)) {
+            return htmlspecialchars(print_r($value, true));
+        }
+
+        return htmlspecialchars((string) $value);
     }
 
-    if (($comparison['overall_status'] ?? null) !== 'pass') {
-        return true;
+    function applyLlmSoftFieldOverrides(array $comparison, array $llmResult): array
+    {
+        $allowedFields = ['brand', 'producer'];
+        $overrides = $llmResult['soft_field_overrides'] ?? [];
+
+        foreach ($allowedFields as $field) {
+            if (empty($overrides[$field]['override'])) {
+                continue;
+            }
+
+            $newStatus = $overrides[$field]['status'] ?? null;
+            $confidence = (int)($overrides[$field]['confidence'] ?? 0);
+            $reason = $overrides[$field]['reason'] ?? 'LLM soft-field adjudication applied.';
+
+            if (!in_array($newStatus, ['pass', 'review', 'fail'], true)) {
+                continue;
+            }
+
+            /*
+            * Require high confidence to upgrade to pass.
+            */
+            if ($newStatus === 'pass' && $confidence < 90) {
+                $newStatus = 'review';
+                $reason .= ' Confidence was below the pass threshold, so the field remains review.';
+            }
+
+            if (!isset($comparison['fields'][$field])) {
+                continue;
+            }
+
+            $originalStatus = $comparison['fields'][$field]['status'] ?? 'review';
+
+            /*
+            * Only allow upgrades for soft fields.
+            * fail -> review/pass
+            * review -> pass
+            * pass remains pass
+            */
+            $comparison['fields'][$field]['status'] = $newStatus;
+            $comparison['fields'][$field]['reason'] =
+                'LLM soft-field review: ' . $reason . ' Original rule-based status was ' . strtoupper($originalStatus) . '.';
+
+            $comparison['fields'][$field]['llm_override_applied'] = true;
+            $comparison['fields'][$field]['llm_confidence'] = $confidence;
+        }
+
+        $comparison['overall_status'] = recalculateOverallStatus($comparison['fields'] ?? []);
+
+        return $comparison;
     }
 
-    return false;
-}
+    function recalculateOverallStatus(array $fields): string
+    {
+        foreach ($fields as $field) {
+            if (($field['status'] ?? null) === 'fail') {
+                return 'fail';
+            }
+        }
 
-function buildCompactLlmInput(array $expected, array $parsed, array $comparison): array
-{
-    return [
-        'application_data' => [
-            'brand' => $expected['brand'] ?? null,
-            'class_type' => $expected['class_type'] ?? null,
-            'abv' => $expected['abv'] ?? null,
-            'net_contents' => $expected['net_contents'] ?? null,
-            'producer' => $expected['producer'] ?? null,
-            'country' => $expected['country'] ?? null,
-        ],
+        foreach ($fields as $field) {
+            if (($field['status'] ?? null) === 'review') {
+                return 'review';
+            }
+        }
 
-        'rule_based_result' => [
-            'overall_status' => $comparison['overall_status'] ?? 'review',
-            'fields' => $comparison['fields'] ?? [],
-        ],
-
-        'parser_evidence' => [
-            'brand' => [
-                'matched_text' => $parsed['expected_brand_matched_text'] ?? null,
-                'confidence' => $parsed['expected_brand_confidence'] ?? null,
-                'match_type' => $parsed['expected_brand_match_type'] ?? null,
-            ],
-            'class_type' => [
-                'designation' => $parsed['designation'] ?? null,
-                'matched_text' => $parsed['matched_text'] ?? null,
-                'confidence' => $parsed['classification_confidence'] ?? null,
-                'status' => $parsed['class_type_status'] ?? null,
-                'reason' => $parsed['class_type_reason'] ?? null,
-            ],
-            'abv' => [
-                'found' => $parsed['abv'] ?? null,
-            ],
-            'net_contents' => [
-                'found' => $parsed['net_contents'] ?? null,
-            ],
-            'producer' => [
-                'found' => $parsed['producer_found'] ?? null,
-                'confidence' => $parsed['producer_confidence'] ?? null,
-                'reason' => $parsed['producer_reason'] ?? null,
-            ],
-            'country' => [
-                'found' => $parsed['country_found'] ?? null,
-                'confidence' => $parsed['country_confidence'] ?? null,
-                'reason' => $parsed['country_reason'] ?? null,
-            ],
-            'government_warning' => [
-                'status' => $parsed['warning_status'] ?? null,
-                'exact_found' => $parsed['warning_exact_found'] ?? null,
-                'partial_found' => $parsed['warning_partial_found'] ?? null,
-                'matched_text' => $parsed['warning_matched_text'] ?? null,
-                'confidence' => $parsed['warning_confidence'] ?? null,
-            ],
-            'flags' => $parsed['flags'] ?? [],
-        ],
-
-        'adjudication_rules' => [
-            'Do not invent label text.',
-            'Do not re-run OCR.',
-            'Use the existing field results and parser evidence only.',
-            'If any field is fail, final recommendation should be fail unless the failure is clearly a parser limitation.',
-            'If any field is review and none fail, final recommendation should be review.',
-            'Only return pass when all required fields pass.',
-            'Government warning requires exact confirmation to pass.',
-        ],
-    ];
-}
-
-function statusClass(?string $status): string
-{
-    $status = strtolower((string) $status);
-
-    return in_array($status, ['pass', 'review', 'fail'], true)
-        ? $status
-        : 'review';
-}
-
-function renderValue(mixed $value): string
-{
-    if (is_array($value) || is_object($value)) {
-        return htmlspecialchars(print_r($value, true));
+        return 'pass';
     }
-
-    return htmlspecialchars((string) $value);
-}
 
 if (!isset($_FILES['label'])) {
     die("No file uploaded");
@@ -190,6 +258,10 @@ if ($llmRequested && $llmRecommendedByRules) {
     $llmExecuted = true;
 }
 $llmDuration = microtime(true) - $llmStartedAt;
+if ($llmExecuted && is_array($llmResult)) {
+    $comparison = applyLlmSoftFieldOverrides($comparison, $llmResult);
+}
+
 $totalDuration = microtime(true) - $processStartedAt;
 ?>
 <!DOCTYPE html>
