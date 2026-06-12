@@ -93,6 +93,10 @@ $expected = [
     'country' => $_POST['expected_country'] ?? null,
 ];
 
+if (empty(trim((string)($expected['class_type'] ?? '')))) {
+    die("Class / Type is required.");
+}
+
 $parser = new LabelParser();
 $parsed = $parser->parse($output, $expected);
 

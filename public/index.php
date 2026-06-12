@@ -9,7 +9,7 @@
 
 <h2>Upload Label Image</h2>
 
-<form action="process.php" method="post" enctype="multipart/form-data">
+<form id="labelForm" action="process.php" method="post" enctype="multipart/form-data">
     <h1>Alcohol Label Verification</h1>
 
     <fieldset>
@@ -30,12 +30,21 @@
 
         <label>
             Class / Type
-            <input type="text" name="expected_class_type" placeholder="Kentucky Straight Bourbon Whiskey" required>
+            <input
+                type="text"
+                id="expected_class_type"
+                name="expected_class_type"
+                placeholder="Kentucky Straight Bourbon Whiskey"
+                required
+            >
         </label>
+        <p id="classTypeError" style="display:none; color:#b71c1c; font-size:0.9em;">
+            Class / Type is required.
+        </p>
 
         <label>
             Alcohol Content
-            <input type="text" name="expected_abv" placeholder="45% Alc./Vol. (90 Proof)" required>
+            <input type="text" name="expected_abv" placeholder="45%" required>
         </label>
 
         <label>
@@ -49,8 +58,8 @@
         </label>
 
         <label>
-            Country of Origin
-            <input type="text" name="expected_country" placeholder="United States">
+            Country of Origin (Import Only)
+            <input type="text" name="expected_country" placeholder="">
         </label>
     </fieldset>
 
@@ -69,6 +78,22 @@
 
     <button type="submit">Verify Label</button>
 </form>
+
+<script>
+document.getElementById('labelForm').addEventListener('submit', function (event) {
+    const classTypeInput = document.getElementById('expected_class_type');
+    const classTypeError = document.getElementById('classTypeError');
+
+    if (!classTypeInput.value.trim()) {
+        event.preventDefault();
+        classTypeError.style.display = 'block';
+        classTypeInput.focus();
+        return;
+    }
+
+    classTypeError.style.display = 'none';
+});
+</script>
 
 </body>
 </html>

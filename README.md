@@ -24,14 +24,21 @@ This prototype handles obvious matches with local OCR and deterministic rules.
 It only invokes AI when the local result is ambiguous, low-confidence, or mismatched.
 The AI does not replace compliance agents. It explains edge cases and routes them to pass, fail, or review.
 
-LabelParser:
-Extracts fields and detects whether expected fields appear in OCR.
-
+### Class / Type Verification
 Class/type verification is implemented as a prototype rules lookup, not as a complete legal standards-of-identity engine. The code maps OCR evidence to a limited set of TTB class/type designations and compares those results to the application data using canonical equivalence rules, such as LIQUEUR/CORDIAL, MESCAL/MEZCAL, and WHISKEY/WHISKY.
 
 Because TTB class/type rules are extensive and depend on production method, formula, origin, ABV, ingredients, and other facts not always visible on the label, this prototype intentionally treats uncertain class/type results as Review. A production system would require a validated rule library, test fixtures for each class/type, reviewer-approved edge cases, and audit logging before replacing human review.
 
 Only a small prototype subset of TTB class/type rules is implemented. The rules are organized as data so a production version could expand, test, and validate each class/type designation. Because the full standards depend on production method, formula, ingredients, origin, ABV, and other facts not always visible in OCR, unrecognized or ambiguous class/type results are routed to Review.
+
+Class / Type is required as part of the application data. This prototype does not attempt to fully infer a product’s class/type from the label alone. Instead, it treats the application value as the expected designation and checks whether the OCR output contains compatible class/type evidence based on a limited prototype ruleset.
+
+This design choice keeps the core workflow focused on verification rather than full legal classification. TTB class/type rules are complex and may depend on production method, formula, ingredients, origin, ABV, flavoring, and other facts that may not be visible on the label image alone.
+
+A future enhancement would be to replace the free-text Class / Type field with an IntelliSense-style lookup backed by a validated list of confirmed TTB class/type designations. This would reduce typos, normalize equivalent designations such as `LIQUEUR`, `CORDIAL`, and `LIQUEUR/CORDIAL`, and help ensure that application data is entered consistently before OCR verification begins.
+
+LabelParser:
+Extracts fields and detects whether expected fields appear in OCR.
 
 ApplicationComparator:
 Compares expected vs parsed and decides field-level pass/fail/review in a cleaner report.

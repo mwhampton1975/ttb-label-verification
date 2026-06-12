@@ -250,15 +250,11 @@ class LabelParser {
         $result["abv"] = $this->extractAbv($cleanLines);
         $result["net_contents"] = $this->extractNetContents($cleanLines);
 
-        if (!empty($expected['class_type'])) {
-            $classResult = $this->verifyExpectedClassType(
-                $expected['class_type'],
-                $cleanLines,
-                $result['abv']
-            );
-        } else {
-            //$classResult = $this->inferClassTypeFromLabelOnly($cleanLines);
-        }
+        $classResult = $this->verifyExpectedClassType(
+            $expected['class_type'],
+            $cleanLines,
+            $result['abv']
+        );
 
         $result["class"] = $classResult["class"] ?? null;
         $result["type"] = $classResult["type"] ?? null;
