@@ -72,9 +72,11 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
                     'found' => $parsed['net_contents'] ?? null,
                 ],
                 'producer' => [
+                    'expected' => $expected['producer'] ?? null,
                     'found' => $parsed['producer_found'] ?? null,
-                    'confidence' => $parsed['producer_confidence'] ?? null,
-                    'reason' => $parsed['producer_reason'] ?? null,
+                    'status' => $fields['producer']['status'] ?? null,
+                    'reason' => $fields['producer']['reason'] ?? null,
+                    'ocr_nearby_text' => $parsed['producer_debug_window'] ?? null,
                 ],
                 'country' => [
                     'found' => $parsed['country_found'] ?? null,

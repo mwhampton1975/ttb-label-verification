@@ -624,7 +624,9 @@ class LabelParser {
         $result["matched_text"] = $classResult["matched_text"] ?? null;
         $result["classification_confidence"] = $classResult["confidence"] ?? 0;
         $result["needs_review"] = $classResult["needs_review"] ?? false;
-        $result["flags"] = $classResult["flags"] ?? [];
+        if (!empty($classResult["flags"])) {
+            $result["flags"] = array_merge($result["flags"], $classResult["flags"]);
+        }
 
         $result["class_type_status"] = $classResult["status"] ?? "review";
         $result["class_type_reason"] = $classResult["reason"] ?? null;
@@ -2195,6 +2197,7 @@ class LabelParser {
                 'found' => implode(', ', $matchedTokens),
                 'status' => 'pass',
                 'confidence' => (int)round($coverage * 100),
+                'debug_window' => $evidenceWindow,
                 'reason' => 'Producer/bottler address was substantially found in OCR text.',
                 'flag' => null,
             ];
@@ -2206,6 +2209,7 @@ class LabelParser {
                 'found' => implode(', ', $matchedTokens),
                 'status' => 'review',
                 'confidence' => (int)round($coverage * 100),
+                'debug_window' => $evidenceWindow,
                 'reason' => 'Producer/bottler address was partially found in OCR text. Human review recommended.',
                 'flag' => 'PRODUCER_PARTIAL_MATCH',
             ];
@@ -2216,6 +2220,7 @@ class LabelParser {
             'found' => null,
             'status' => 'fail',
             'confidence' => 0,
+                'debug_window' => $evidenceWindow,
             'reason' => 'Producer/bottler address was provided in application data but was not found in OCR text.',
             'flag' => 'PRODUCER_NOT_FOUND',
         ];
