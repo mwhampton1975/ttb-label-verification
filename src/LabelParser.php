@@ -194,6 +194,63 @@ class LabelParser {
             ],
             'min_abv' => 40,
         ],
+
+        'ALE' => [
+            'display' => 'ALE',
+            'aliases' => [
+                'ALE',
+            ],
+            'patterns' => [
+                '/\bALE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'BEER' => [
+            'display' => 'BEER',
+            'aliases' => [
+                'BEER',
+                'MALT BEVERAGE',
+            ],
+            'patterns' => [
+                '/\bBEER\b/',
+                '/\bMALT\s+BEVERAGE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'LAGER' => [
+            'display' => 'LAGER',
+            'aliases' => [
+                'LAGER',
+            ],
+            'patterns' => [
+                '/\bLAGER\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'STOUT' => [
+            'display' => 'STOUT',
+            'aliases' => [
+                'STOUT',
+            ],
+            'patterns' => [
+                '/\bSTOUT\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PORTER' => [
+            'display' => 'PORTER',
+            'aliases' => [
+                'PORTER',
+            ],
+            'patterns' => [
+                '/\bPORTER\b/',
+            ],
+            'min_abv' => null,
+        ],
     ];
 
     public function parse($text, array $expected = []) {

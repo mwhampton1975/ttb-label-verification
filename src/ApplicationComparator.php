@@ -222,8 +222,8 @@ class ApplicationComparator
 
     private function compareNetContents(?string $expected, ?string $found): array
     {
-        $expectedMl = $this->normalizeVolumeToMl($expected);
-        $foundMl = $this->normalizeVolumeToMl($found);
+        $expectedMl = $this->parseVolumeMl($expected);
+        $foundMl = $this->parseVolumeMl($found);
 
         if ($expectedMl === null) {
             return [
@@ -243,12 +243,13 @@ class ApplicationComparator
             ];
         }
 
-        if (abs($expectedMl - $foundMl) < 1) {
+        // Allow small rounding differences between metric and US customary units.
+        if (abs($expectedMl - $foundMl) <= 2.0) {
             return [
                 'expected' => $expected,
                 'found' => $found,
                 'status' => 'pass',
-                'reason' => 'Net contents match.'
+                'reason' => 'Net contents match after unit normalization.'
             ];
         }
 
@@ -256,8 +257,63 @@ class ApplicationComparator
             'expected' => $expected,
             'found' => $found,
             'status' => 'fail',
-            'reason' => 'Net contents do not match application data.'
+            'reason' => sprintf(
+                'Net contents do not match application data. Expected approximately %.1f mL; found approximately %.1f mL.',
+                $expectedMl,
+                $foundMl
+            )
         ];
+    }
+
+    private function parseVolumeMl(?string $value): ?float
+    {
+        if (!$value || trim($value) === '') {
+            return null;
+        }
+
+        $text = strtoupper($value);
+        $text = str_replace(['FL. OZ.', 'FL OZ.', 'FL. OZ', 'FL OZ'], 'FL OZ', $text);
+        $text = str_replace(['PINTS'], 'PINT', $text);
+        $text = str_replace(['MILLILITERS', 'MILLILITRES'], 'ML', $text);
+        $text = str_replace(['LITERS', 'LITRES'], 'L', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        $totalMl = 0.0;
+        $matched = false;
+
+        // Milliliters
+        if (preg_match_all('/(\d+(?:\.\d+)?)\s*ML\b/', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $totalMl += (float)$m[1];
+                $matched = true;
+            }
+        }
+
+        // Liters
+        if (preg_match_all('/(\d+(?:\.\d+)?)\s*L\b/', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $totalMl += ((float)$m[1]) * 1000;
+                $matched = true;
+            }
+        }
+
+        // Pints: 1 US pint = 473.176 mL
+        if (preg_match_all('/(\d+(?:\.\d+)?)\s*PINT\b/', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $totalMl += ((float)$m[1]) * 473.176;
+                $matched = true;
+            }
+        }
+
+        // Fluid ounces: 1 US fl oz = 29.5735 mL
+        if (preg_match_all('/(\d+(?:\.\d+)?)\s*FL\s*OZ\b/', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $totalMl += ((float)$m[1]) * 29.5735;
+                $matched = true;
+            }
+        }
+
+        return $matched ? $totalMl : null;
     }
 
     private function normalizeText(?string $value): string
