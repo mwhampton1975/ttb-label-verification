@@ -1401,6 +1401,392 @@ class LabelParser {
         ];
     }
 
+    private function resolveExpectedClassType(string $expectedClassType): array
+    {
+        $expectedNorm = $this->normalizeClassTypeText($expectedClassType);
+
+        // 1. Match expected value against exact designation rules.
+        foreach ($this->ttbDesignationRules as $rule) {
+            $ruleClass = $this->normalizeClassTypeText($rule['class'] ?? '');
+            $ruleType = $this->normalizeClassTypeText($rule['type'] ?? '');
+
+            if (
+                $expectedNorm === $ruleType ||
+                $expectedNorm === $ruleClass ||
+                $expectedNorm === trim($ruleClass . ' ' . $ruleType)
+            ) {
+                return [
+                    'class' => $rule['class'],
+                    'type' => $rule['type'],
+                    'designation' => $rule['type'] ?? $rule['class'],
+                    'normalized' => $expectedNorm,
+                    'source' => 'ttbDesignationRules',
+                ];
+            }
+        }
+
+        // 2. Match expected value against liqueur/cordial type rules.
+        foreach ($this->ttbLiqueurRules as $rule) {
+            $ruleType = $this->normalizeClassTypeText($rule['type'] ?? '');
+
+            if ($ruleType !== '' && $expectedNorm === $ruleType) {
+                return [
+                    'class' => 'LIQUEUR/CORDIAL',
+                    'type' => $rule['type'],
+                    'designation' => $rule['type'],
+                    'normalized' => $expectedNorm,
+                    'source' => 'ttbLiqueurRules',
+                ];
+            }
+        }
+
+        // 3. Generic liqueur/cordial expected value.
+        if (
+            str_contains($expectedNorm, 'LIQUEUR') ||
+            str_contains($expectedNorm, 'CORDIAL')
+        ) {
+            return [
+                'class' => 'LIQUEUR/CORDIAL',
+                'type' => null,
+                'designation' => 'LIQUEUR/CORDIAL',
+                'normalized' => $expectedNorm,
+                'source' => 'generic_l صiqueur_cordial',
+            ];
+        }
+
+        // 4. Recognized cocktails.
+        foreach ($this->cocktails as $cocktail) {
+            $cocktailNorm = $this->normalizeClassTypeText($cocktail);
+
+            if ($expectedNorm === $cocktailNorm) {
+                return [
+                    'class' => 'RECOGNIZED COCKTAILS',
+                    'type' => $cocktail,
+                    'designation' => $cocktail,
+                    'normalized' => $expectedNorm,
+                    'source' => 'cocktails',
+                ];
+            }
+        }
+
+        // 5. Fallback: preserve the user's expected designation.
+        return [
+            'class' => $expectedClassType,
+            'type' => null,
+            'designation' => $expectedClassType,
+            'normalized' => $expectedNorm,
+            'source' => 'unresolved_expected_value',
+        ];
+    }
+
+    private function scanClassTypeRules(array $lines): array
+    {
+        $text = $this->normalizeClassTypeText(implode(' ', $lines));
+        $matches = [];
+
+        // 1. Exact TTB designation rules.
+        foreach ($this->ttbDesignationRules as $rule) {
+            if (preg_match($rule['pattern'], $text, $m)) {
+                $matches[] = [
+                    'class' => $rule['class'],
+                    'type' => $rule['type'],
+                    'designation' => $rule['type'] ?? $rule['class'],
+                    'matched_text' => trim($m[0]),
+                    'score' => $rule['score'] ?? 80,
+                    'source' => 'ttbDesignationRules',
+                    'min_abv' => $this->minAbvForRule($rule['class'], $rule['type'] ?? null),
+                ];
+            }
+        }
+
+        // 2. Liqueur/cordial type rules.
+        foreach ($this->ttbLiqueurRules as $rule) {
+            if (preg_match($rule['pattern'], $text, $m)) {
+                $type = $rule['type'];
+
+                if ($type === null && !empty($m[1])) {
+                    $type = 'CRÈME DE ' . strtoupper($m[1]);
+                }
+
+                $matches[] = [
+                    'class' => 'LIQUEUR/CORDIAL',
+                    'type' => $type,
+                    'designation' => $type ?? 'LIQUEUR/CORDIAL',
+                    'matched_text' => trim($m[0]),
+                    'score' => 95,
+                    'source' => 'ttbLiqueurRules',
+                    'min_abv' => $this->minAbvForRule('LIQUEUR/CORDIAL', $type),
+                ];
+            }
+        }
+
+        // 3. Generic LIQUEUR/CORDIAL class evidence.
+        // This is the important missing bridge for labels like:
+        // "RUM WITH COCONUT LIQUEUR"
+        if (preg_match('/\b(LIQUEUR|CORDIAL)\b/', $text, $m)) {
+            $matches[] = [
+                'class' => 'LIQUEUR/CORDIAL',
+                'type' => null,
+                'designation' => 'LIQUEUR/CORDIAL',
+                'matched_text' => $this->bestClassTypeWindow($lines, '/\b(LIQUEUR|CORDIAL)\b/'),
+                'score' => 82,
+                'source' => 'generic_l صiqueur_cordial_word',
+                'min_abv' => null,
+            ];
+        }
+
+        // 4. Recognized cocktails.
+        $cocktails = $this->cocktails;
+        usort($cocktails, fn($a, $b) => strlen($b) <=> strlen($a));
+
+        foreach ($cocktails as $cocktail) {
+            $cocktailNorm = $this->normalizeClassTypeText($cocktail);
+            $pattern = '/\b' . preg_quote($cocktailNorm, '/') . '\b/';
+
+            if (preg_match($pattern, $text, $m)) {
+                $matches[] = [
+                    'class' => 'RECOGNIZED COCKTAILS',
+                    'type' => $cocktail,
+                    'designation' => $cocktail,
+                    'matched_text' => trim($m[0]),
+                    'score' => 90,
+                    'source' => 'cocktails',
+                    'min_abv' => null,
+                ];
+            }
+        }
+
+        // Sort highest-confidence / most-specific matches first.
+        usort($matches, function ($a, $b) {
+            return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+        });
+
+        return $this->dedupeClassTypeMatches($matches);
+    }
+
+    private function classTypeCompatibility(array $expected, array $observed): string
+    {
+        $expectedClass = $this->normalizeClassTypeText($expected['class'] ?? '');
+        $expectedType = $this->normalizeClassTypeText($expected['type'] ?? '');
+        $observedClass = $this->normalizeClassTypeText($observed['class'] ?? '');
+        $observedType = $this->normalizeClassTypeText($observed['type'] ?? '');
+
+        if ($expectedClass === '' || $observedClass === '') {
+            return 'none';
+        }
+
+        // Exact type match.
+        if ($expectedType !== '' && $observedType !== '' && $expectedType === $observedType) {
+            return 'exact_type';
+        }
+
+        // Expected generic class, observed same class/type family.
+        if ($expectedType === '' && $expectedClass === $observedClass) {
+            return 'same_class_expected_generic';
+        }
+
+        // Expected specific type, OCR only found generic class.
+        if ($expectedType !== '' && $observedType === '' && $expectedClass === $observedClass) {
+            return 'same_class_observed_generic';
+        }
+
+        return 'none';
+    }
+
+    private function compatibilityScore(string $compatibility): int
+    {
+        return match ($compatibility) {
+            'exact_type' => 3,
+            'same_class_expected_generic' => 2,
+            'same_class_observed_generic' => 1,
+            default => 0,
+        };
+    }
+
+    private function checkClassTypeAbv(array $match, ?float $abvPercent): array
+    {
+        if ($abvPercent === null) {
+            return [
+                'status' => 'review',
+                'reason' => 'ABV could not be parsed for class/type ABV validation.',
+            ];
+        }
+
+        $minAbv = $match['min_abv'] ?? null;
+
+        if ($minAbv === null) {
+            return [
+                'status' => 'pass',
+                'reason' => null,
+            ];
+        }
+
+        if ($abvPercent < $minAbv) {
+            return [
+                'status' => 'fail',
+                'reason' => sprintf(
+                    '%s requires at least %s%% ABV; OCR/application ABV is %s%%.',
+                    $match['designation'] ?? $match['class'] ?? 'This designation',
+                    $minAbv,
+                    $abvPercent
+                ),
+            ];
+        }
+
+        return [
+            'status' => 'pass',
+            'reason' => sprintf(
+                'ABV meets the minimum %s%% requirement for %s.',
+                $minAbv,
+                $match['designation'] ?? $match['class'] ?? 'this designation'
+            ),
+        ];
+    }
+
+    private function minAbvForRule(?string $class, ?string $type): ?float
+    {
+        $classNorm = $this->normalizeClassTypeText($class ?? '');
+        $typeNorm = $this->normalizeClassTypeText($type ?? '');
+
+        // Liqueur/cordial specific types in the chart often carry 30% minimums,
+        // but generic LIQUEUR/CORDIAL evidence alone should not be over-validated
+        // without formula/sugar context.
+        if ($classNorm === 'LIQUEUR CORDIAL' || $classNorm === 'LIQUEUR/CORDIAL') {
+            if ($typeNorm !== '') {
+                return 30.0;
+            }
+
+            return null;
+        }
+
+        if (str_starts_with($classNorm, 'FLAVORED ')) {
+            return 30.0;
+        }
+
+        return match ($classNorm) {
+            'WHISKY',
+            'RUM',
+            'GIN',
+            'BRANDY',
+            'AGAVE SPIRITS',
+            'NEUTRAL SPIRITS',
+            'NEUTRAL SPIRITS OR ALCOHOL' => 40.0,
+            default => null,
+        };
+    }
+
+    private function parseAbvPercent(?string $abv): ?float
+    {
+        if (!$abv) {
+            return null;
+        }
+
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%?/', $abv, $m)) {
+            return (float) $m[1];
+        }
+
+        return null;
+    }
+
+    private function normalizeClassTypeText(string $text): string
+    {
+        $text = strtoupper($text);
+
+        $text = str_replace('WHISKEY', 'WHISKY', $text);
+        $text = str_replace('CORDIALS', 'CORDIAL', $text);
+        $text = str_replace('LIQUEURS', 'LIQUEUR', $text);
+
+        // Make LIQUEUR/CORDIAL and LIQUEUR CORDIAL comparable.
+        $text = str_replace('/', ' ', $text);
+
+        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        return trim($text);
+    }
+
+    private function bestClassTypeWindow(array $lines, string $pattern): ?string
+    {
+        $windows = $this->buildClassTypeSearchWindows($lines);
+
+        foreach ($windows as $window) {
+            $normalized = $this->normalizeClassTypeText($window['text']);
+
+            if (preg_match($pattern, $normalized)) {
+                return $window['text'];
+            }
+        }
+
+        return null;
+    }
+
+    private function buildClassTypeSearchWindows(array $lines): array
+    {
+        $clean = [];
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $line = preg_replace('/\s+/', ' ', $line);
+
+            if ($line !== '') {
+                $clean[] = $line;
+            }
+        }
+
+        $windows = [];
+        $count = count($clean);
+
+        for ($i = 0; $i < $count; $i++) {
+            for ($size = 1; $size <= 4; $size++) {
+                if ($i + $size > $count) {
+                    break;
+                }
+
+                $text = trim(implode(' ', array_slice($clean, $i, $size)));
+
+                if ($text === '') {
+                    continue;
+                }
+
+                $windows[] = [
+                    'text' => $text,
+                    'line_count' => $size,
+                    'start_line' => $i,
+                ];
+            }
+        }
+
+        return $windows;
+    }
+
+    private function dedupeClassTypeMatches(array $matches): array
+    {
+        $seen = [];
+        $deduped = [];
+
+        foreach ($matches as $match) {
+            $key = implode('|', [
+                $this->normalizeClassTypeText($match['class'] ?? ''),
+                $this->normalizeClassTypeText($match['type'] ?? ''),
+                $this->normalizeClassTypeText($match['matched_text'] ?? ''),
+            ]);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $deduped[] = $match;
+        }
+
+        return $deduped;
+    }
+
     private function canonicalClassTypeKey(?string $value): ?string
     {
         if (!$value || trim($value) === '') {
