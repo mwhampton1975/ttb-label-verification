@@ -206,23 +206,56 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
         return 'pass';
     }
 
-if (!isset($_FILES['label'])) {
-    die("No file uploaded");
-}
+$sampleMap = [
+    'bombay_sapphire.jpg' => __DIR__ . '/../samples/bombay_sapphire.jpg',
+    'hawks_shadow.jpg' => __DIR__ . '/../samples/hawks_shadow.jpg',
+    'stormchaser.jpg' => __DIR__ . '/../samples/stormchaser.jpg',
+    'brand-label-new1.jpg' => __DIR__ . '/../samples/brand-label-new1.jpg',
+    'brand-label-new2.jpg' => __DIR__ . '/../samples/brand-label-new2.jpg',
+    'honey_huckleberry_pie.png' => __DIR__ . '/../samples/honey_huckleberry_pie.png',
+    'tropical_chimp.jpg' => __DIR__ . '/../samples/tropical_chimp.jpg',
+    'malt_and_hop_india_pale_ale.png' => __DIR__ . '/../samples/malt_and_hop_india_pale_ale.png',
+];
 
-$uploadDir = __DIR__ . "/uploads/";
+$sampleLabel = $_POST['sample_label'] ?? '';
 
-if (!file_exists($uploadDir)) {
-    mkdir($uploadDir, 0777, true);
-}
+if ($sampleLabel !== '') {
+    /*
+     * Demo sample path.
+     * Only allow known sample filenames from the whitelist above.
+     */
+    if (empty($sampleMap[$sampleLabel]) || !is_file($sampleMap[$sampleLabel])) {
+        die("Invalid sample label selected.");
+    }
 
-$tmpName = $_FILES['label']['tmp_name'];
-$fileName = basename($_FILES['label']['name']);
+    $targetPath = $sampleMap[$sampleLabel];
+    $fileName = $sampleLabel;
+} else {
+    /*
+     * Normal upload path.
+     */
+    if (
+        !isset($_FILES['label']) ||
+        !isset($_FILES['label']['tmp_name']) ||
+        $_FILES['label']['error'] !== UPLOAD_ERR_OK
+    ) {
+        die("No file uploaded");
+    }
 
-$targetPath = $uploadDir . $fileName;
+    $uploadDir = __DIR__ . "/uploads/";
 
-if (!move_uploaded_file($tmpName, $targetPath)) {
-    die("Upload failed");
+    if (!file_exists($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    $tmpName = $_FILES['label']['tmp_name'];
+    $fileName = basename($_FILES['label']['name']);
+
+    $targetPath = $uploadDir . $fileName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        die("Upload failed");
+    }
 }
 
 /*

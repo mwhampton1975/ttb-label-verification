@@ -1,4 +1,72 @@
 <?php
+$samples = [
+    'bombay_sapphire' => [
+        'label' => 'Bombay Sapphire Gin',
+        'image' => 'bombay_sapphire.jpg',
+        'brand' => 'BOMBAY SAPPHIRE',
+        'class_type' => 'GIN',
+        'abv' => '47',
+        'net_contents' => '750 ML',
+        'producer' => '',
+        'country' => 'England',
+        'notes' => 'Demonstrates gin class/type evidence, imported-product country handling, and OCR noise.',
+    ],
+    'stormchaser' => [
+        'label' => 'Stormchaser Chardonnay',
+        'image' => 'stormchaser.jpg',
+        'brand' => 'LIGHTHOUSE',
+        'class_type' => 'CHARDONNAY',
+        'abv' => '13.5',
+        'net_contents' => '750 ML',
+        'producer' => 'LIGHTHOUSE VINTNERS KINGSTON, NY',
+        'country' => '',
+        'notes' => 'Demonstrates wine varietal class/type verification, ABV parsing, and producer review.',
+    ],
+    'malt_and_hop_ipa' => [
+        'label' => 'Malt & Hop India Pale Ale',
+        'image' => 'malt_and_hop_india_pale_ale.png',
+        'brand' => 'MALT & HOP BREWERY',
+        'class_type' => 'IPA',
+        'abv' => '4',
+        'net_contents' => '500 ML',
+        'producer' => 'MALT & HOP BREWERY HYATTSVILLE, MD',
+        'country' => '',
+        'notes' => 'Demonstrates malt beverage class/type alias handling and government warning detection.',
+    ],
+    'honey_huckleberry_pie' => [
+        'label' => 'Honey Huckleberry Pie',
+        'image' => 'honey_huckleberry_pie.png',
+        'brand' => '',
+        'class_type' => 'LIQUEUR',
+        'abv' => '',
+        'net_contents' => '',
+        'producer' => '',
+        'country' => '',
+        'notes' => 'Demonstrates liqueur/cordial class/type handling. Adjust expected fields if needed.',
+    ],
+    'tropical_chimp' => [
+        'label' => 'Tropical Chimp',
+        'image' => 'tropical_chimp.jpg',
+        'brand' => '',
+        'class_type' => '',
+        'abv' => '',
+        'net_contents' => '',
+        'producer' => '',
+        'country' => '',
+        'notes' => 'Demo sample. Fill in expected application values as needed.',
+    ],
+    'hawks_shadow' => [
+        'label' => 'Hawk’s Shadow',
+        'image' => 'hawks_shadow.jpg',
+        'brand' => '',
+        'class_type' => '',
+        'abv' => '',
+        'net_contents' => '',
+        'producer' => '',
+        'country' => '',
+        'notes' => 'Demo sample. Fill in expected application values as needed.',
+    ],
+];
 ?>
 <!DOCTYPE html>
 <html>
@@ -139,6 +207,35 @@
             color: #555;
             margin-top: 0;
         }
+        select {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 6px;
+            padding: 10px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            font-size: 15px;
+            font-family: Arial, sans-serif;
+            background: #fff;
+        }
+
+        .sample-notes {
+            display: none;
+            margin-top: 10px;
+            padding: 12px 14px;
+            border-radius: 4px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            color: #444;
+            font-size: 0.95em;
+        }
+
+        .sample-active {
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            color: #1b5e20;
+        }
     </style>
 </head>
 <body>
@@ -156,6 +253,30 @@
 </div>
 
 <form id="labelForm" action="process.php" method="post" enctype="multipart/form-data">
+    <fieldset>
+        <legend>Demo Sample</legend>
+
+        <label>
+            Load a sample scenario
+            <select id="sampleSelector">
+                <option value="">Manual upload / custom application data</option>
+                <?php foreach ($samples as $sampleId => $sample): ?>
+                    <option value="<?php echo htmlspecialchars($sampleId); ?>">
+                        <?php echo htmlspecialchars($sample['label']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+
+        <input type="hidden" id="sample_label" name="sample_label" value="">
+
+        <p class="hint">
+            Select a sample to auto-fill known application data and run the demo without uploading a file.
+            You may still upload your own label and enter custom values manually.
+        </p>
+
+        <div id="sampleNotes" class="sample-notes"></div>
+    </fieldset>
     <p class="required-note">Fields marked by the browser as required must be completed before verification.</p>
 
     <fieldset>
@@ -163,7 +284,7 @@
 
         <label>
             Upload label image
-            <input type="file" name="label" accept="image/*,.pdf" required>
+            <input id="labelUpload" type="file" name="label" accept="image/*,.pdf" required>
         </label>
 
         <p class="hint">
@@ -176,7 +297,7 @@
 
         <label>
             Brand Name
-            <input type="text" name="expected_brand" placeholder="OLD TOM DISTILLERY" required>
+            <input type="text" id="expected_brand" name="expected_brand" placeholder="OLD TOM DISTILLERY" required>
         </label>
 
         <label>
@@ -198,7 +319,7 @@
 
         <label>
             Alcohol Content
-            <input type="text" name="expected_abv" placeholder="45%" required>
+            <input type="text" id="expected_abv" name="expected_abv" placeholder="45%" required>
         </label>
         <p class="hint">
             You may enter values like 45 or 45%. The label itself must still show alcohol content clearly.
@@ -206,17 +327,17 @@
 
         <label>
             Net Contents
-            <input type="text" name="expected_net_contents" placeholder="750 mL" required>
+            <input type="text" id="expected_net_contents" name="expected_net_contents" placeholder="750 mL" required>
         </label>
 
         <label>
             Bottler / Producer Name and Address
-            <textarea name="expected_producer" placeholder="Bottled by Old Tom Distillery, Louisville, KY"></textarea>
+            <textarea id="expected_producer" name="expected_producer" placeholder="Bottled by Old Tom Distillery, Louisville, KY"></textarea>
         </label>
 
         <label>
             Country of Origin (Import Only)
-            <input type="text" name="expected_country" placeholder="Canada">
+            <input type="text" id="expected_country" name="expected_country" placeholder="">
         </label>
         <p class="hint">
             Leave blank for domestic products. If the label appears to be imported, the country of origin should be provided.
@@ -254,7 +375,73 @@
 </form>
 
 <script>
-document.getElementById('labelForm').addEventListener('submit', function (event) {
+const sampleData = <?php echo json_encode($samples, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); ?>;
+
+const labelForm = document.getElementById('labelForm');
+const sampleSelector = document.getElementById('sampleSelector');
+const sampleLabelInput = document.getElementById('sample_label');
+const sampleNotes = document.getElementById('sampleNotes');
+const labelUpload = document.getElementById('labelUpload');
+
+const fields = {
+    brand: document.getElementById('expected_brand'),
+    class_type: document.getElementById('expected_class_type'),
+    abv: document.getElementById('expected_abv'),
+    net_contents: document.getElementById('expected_net_contents'),
+    producer: document.getElementById('expected_producer'),
+    country: document.getElementById('expected_country')
+};
+
+sampleSelector.addEventListener('change', function () {
+    const sampleId = sampleSelector.value;
+
+    if (!sampleId || !sampleData[sampleId]) {
+        sampleLabelInput.value = '';
+        labelUpload.required = true;
+
+        sampleNotes.style.display = 'none';
+        sampleNotes.classList.remove('sample-active');
+        sampleNotes.textContent = '';
+
+        return;
+    }
+
+    const sample = sampleData[sampleId];
+
+    sampleLabelInput.value = sample.image || '';
+
+    fields.brand.value = sample.brand || '';
+    fields.class_type.value = sample.class_type || '';
+    fields.abv.value = sample.abv || '';
+    fields.net_contents.value = sample.net_contents || '';
+    fields.producer.value = sample.producer || '';
+    fields.country.value = sample.country || '';
+
+    /*
+     * Browser security prevents JavaScript from setting a file input.
+     * The hidden sample_label value tells process.php to use a whitelisted sample file instead.
+     */
+    labelUpload.required = false;
+    labelUpload.value = '';
+
+    sampleNotes.style.display = 'block';
+    sampleNotes.classList.add('sample-active');
+    sampleNotes.textContent = sample.notes || 'Sample loaded.';
+});
+
+labelUpload.addEventListener('change', function () {
+    if (labelUpload.files.length > 0) {
+        sampleSelector.value = '';
+        sampleLabelInput.value = '';
+        labelUpload.required = true;
+
+        sampleNotes.style.display = 'none';
+        sampleNotes.classList.remove('sample-active');
+        sampleNotes.textContent = '';
+    }
+});
+
+labelForm.addEventListener('submit', function (event) {
     const classTypeInput = document.getElementById('expected_class_type');
     const classTypeError = document.getElementById('classTypeError');
 
@@ -262,6 +449,13 @@ document.getElementById('labelForm').addEventListener('submit', function (event)
         event.preventDefault();
         classTypeError.style.display = 'block';
         classTypeInput.focus();
+        return;
+    }
+
+    if (!sampleLabelInput.value && !labelUpload.files.length) {
+        event.preventDefault();
+        alert('Please upload a label image or select a demo sample.');
+        labelUpload.focus();
         return;
     }
 
