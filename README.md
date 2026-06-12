@@ -37,6 +37,15 @@ This design choice keeps the core workflow focused on verification rather than f
 
 A future enhancement would be to replace the free-text Class / Type field with an IntelliSense-style lookup backed by a validated list of confirmed TTB class/type designations. This would reduce typos, normalize equivalent designations such as `LIQUEUR`, `CORDIAL`, and `LIQUEUR/CORDIAL`, and help ensure that application data is entered consistently before OCR verification begins.
 
+If country field is empty:
+    Assume domestic / United States.
+    But if OCR contains import language, fail because the application country field was left blank.
+
+If country field is populated:
+    Search OCR for that country.
+    If found, pass.
+    If not found, fail or review depending confidence.
+
 LabelParser:
 Extracts fields and detects whether expected fields appear in OCR.
 

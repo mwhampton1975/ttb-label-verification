@@ -212,6 +212,12 @@ class LabelParser {
             "warning_matched_text" => null,
             "warning_debug" => null,
 
+            "country_status" => "review",
+            "country_expected" => null,
+            "country_found" => null,
+            "country_confidence" => 0,
+            "country_reason" => null,
+
             "status" => "review"
         ];
 
@@ -1553,5 +1559,128 @@ class LabelParser {
             'status' => 'pass',
             'reason' => null,
         ];
+    }
+
+    private function verifyCountryOfOrigin(?string $expectedCountry, array $lines): array
+    {
+        $fullText = $this->normalizeCountryText(implode(' ', $lines));
+        $expectedCountry = trim((string) $expectedCountry);
+
+        $importLanguageDetected = $this->detectImportLanguage($fullText);
+
+        /*
+        * If the user left Country blank, assume domestic unless the label
+        * clearly indicates import language.
+        */
+        if ($expectedCountry === '') {
+            if ($importLanguageDetected) {
+                return [
+                    'expected' => null,
+                    'found' => null,
+                    'status' => 'fail',
+                    'confidence' => 90,
+                    'reason' => 'Country of origin was not provided in application data, but OCR detected import language on the label.',
+                    'flag' => 'IMPORT_COUNTRY_REQUIRED',
+                ];
+            }
+
+            return [
+                'expected' => 'United States',
+                'found' => 'United States assumed',
+                'status' => 'pass',
+                'confidence' => 80,
+                'reason' => 'Country of origin was left blank and no import language was detected, so domestic origin is assumed.',
+                'flag' => null,
+            ];
+        }
+
+        $expectedNorm = $this->normalizeCountryText($expectedCountry);
+
+        if ($expectedNorm === '') {
+            return [
+                'expected' => $expectedCountry,
+                'found' => null,
+                'status' => 'review',
+                'confidence' => 0,
+                'reason' => 'Country of origin was provided but could not be normalized.',
+                'flag' => 'COUNTRY_ORIGIN_REVIEW',
+            ];
+        }
+
+        /*
+        * Direct country match.
+        */
+        if (str_contains($fullText, $expectedNorm)) {
+            return [
+                'expected' => $expectedCountry,
+                'found' => $expectedCountry,
+                'status' => 'pass',
+                'confidence' => 100,
+                'reason' => 'Country of origin was found in OCR text.',
+                'flag' => null,
+            ];
+        }
+
+        /*
+        * Common country aliases.
+        */
+        $aliases = $this->countryAliases($expectedNorm);
+
+        foreach ($aliases as $alias) {
+            if (str_contains($fullText, $alias)) {
+                return [
+                    'expected' => $expectedCountry,
+                    'found' => $alias,
+                    'status' => 'pass',
+                    'confidence' => 95,
+                    'reason' => 'Country of origin was found in OCR text using a recognized country alias.',
+                    'flag' => null,
+                ];
+            }
+        }
+
+        return [
+            'expected' => $expectedCountry,
+            'found' => null,
+            'status' => 'fail',
+            'confidence' => 0,
+            'reason' => 'Country of origin was provided in application data but was not found in OCR text.',
+            'flag' => 'COUNTRY_ORIGIN_NOT_FOUND',
+        ];
+    }
+
+    private function detectImportLanguage(string $normalizedText): bool
+    {
+        return preg_match(
+            '/\b(IMPORTED|IMPORT|IMPORTED\s+BY|IMPORTER|PRODUCT\s+OF|PRODUCED\s+IN|MADE\s+IN)\b/',
+            $normalizedText
+        ) === 1;
+    }
+
+    private function normalizeCountryText(string $text): string
+    {
+        $text = strtoupper($text);
+
+        $text = str_replace('&', ' AND ', $text);
+
+        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        return trim($text);
+    }
+
+    private function countryAliases(string $countryNorm): array
+    {
+        $aliases = [
+            'UNITED STATES' => ['USA', 'U S A', 'US', 'U S', 'UNITED STATES OF AMERICA', 'AMERICA'],
+            'UNITED STATES OF AMERICA' => ['USA', 'U S A', 'US', 'U S', 'UNITED STATES', 'AMERICA'],
+            'CANADA' => ['CANADIAN'],
+            'MEXICO' => ['MEXICAN'],
+            'UNITED KINGDOM' => ['UK', 'U K', 'GREAT BRITAIN', 'ENGLAND', 'SCOTLAND', 'WALES'],
+            'SCOTLAND' => ['SCOTCH', 'UNITED KINGDOM', 'UK', 'U K'],
+            'IRELAND' => ['IRISH'],
+        ];
+
+        return $aliases[$countryNorm] ?? [];
     }
 }

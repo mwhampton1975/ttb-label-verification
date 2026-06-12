@@ -28,6 +28,8 @@ class ApplicationComparator
 
         $results['government_warning'] = $this->compareGovernmentWarning($parsed);
 
+        $results['country'] = $this->compareCountryOfOrigin($expected['country'] ?? null, $parsed);
+
         $overall = $this->overallStatus($results);
 
         return [
@@ -349,40 +351,13 @@ class ApplicationComparator
         ];
     }
 
-    private function canonicalClassTypeKey(?string $value): ?string
+    private function compareCountryOfOrigin(?string $expected, array $parsed): array
     {
-        if (!$value || trim($value) === '') {
-            return null;
-        }
-
-        $value = strtoupper($value);
-
-        $value = str_replace('WHISKEY', 'WHISKY', $value);
-        $value = str_replace('MESCAL', 'MEZCAL', $value);
-
-        $value = str_replace(['/', '-', ','], ' ', $value);
-        $value = preg_replace('/[^A-Z0-9\s]/', ' ', $value);
-        $value = preg_replace('/\s+/', ' ', $value);
-        $value = trim($value);
-
-        $aliases = [
-            'LIQUEUR' => 'LIQUEUR_CORDIAL',
-            'CORDIAL' => 'LIQUEUR_CORDIAL',
-            'LIQUEUR CORDIAL' => 'LIQUEUR_CORDIAL',
-
-            'MEZCAL' => 'MEZCAL',
-            'MESCAL' => 'MEZCAL',
-
-            'WHISKY' => 'WHISKY',
-            'WHISKEY' => 'WHISKY',
-
-            'RUM' => 'RUM',
-            'GIN' => 'GIN',
-            'VODKA' => 'VODKA',
-            'BRANDY' => 'BRANDY',
-            'TEQUILA' => 'TEQUILA',
+        return [
+            'expected' => trim((string)$expected) !== '' ? $expected : 'United States assumed',
+            'found' => $parsed['country_found'] ?? null,
+            'status' => $parsed['country_status'] ?? 'review',
+            'reason' => $parsed['country_reason'] ?? 'Country of origin verification completed by parser.',
         ];
-
-        return $aliases[$value] ?? str_replace(' ', '_', $value);
     }
 }
