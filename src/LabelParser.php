@@ -699,22 +699,62 @@ class LabelParser {
         $text = strtoupper(implode(' ', $lines));
         $text = preg_replace('/\s+/', ' ', $text);
 
-        // Strong pattern: 40% ALC/VOL, 40 % ALC. / VOL., etc.
+        /*
+        * Wine/common format:
+        * ALC. 13.5% BY VOL.
+        * ALCOHOL 13.5% BY VOLUME
+        */
+        if (preg_match('/\b(?:ALC|ALCOHOL)\.?\s*(\d+(?:\.\d+)?)\s*%\s*BY\s*(?:VOL|VOLUME)\.?/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        /*
+        * Standard format:
+        * 40% ALC/VOL
+        * 40 % ALC. / VOL.
+        */
         if (preg_match('/(\d+(?:\.\d+)?)\s*%\s*(?:ALC|ALCOHOL)\.?\s*\/?\s*(?:VOL|VOLUME)\.?/', $text, $m)) {
             return $m[1] . '%';
         }
 
-        // Reverse pattern: ALC/VOL 40%
+        /*
+        * Standard text format:
+        * 13.5% ALC BY VOL
+        * 13.5% ALCOHOL BY VOLUME
+        */
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%\s*(?:ALC|ALCOHOL)\.?\s*BY\s*(?:VOL|VOLUME)\.?/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        /*
+        * Reverse slash format:
+        * ALC/VOL 40%
+        * ALCOHOL/VOLUME 40%
+        */
         if (preg_match('/(?:ALC|ALCOHOL)\.?\s*\/?\s*(?:VOL|VOLUME)\.?\s*(\d+(?:\.\d+)?)\s*%/', $text, $m)) {
             return $m[1] . '%';
         }
 
-        // ABV pattern: 40% ABV
+        /*
+        * ABV format:
+        * 40% ABV
+        */
         if (preg_match('/(\d+(?:\.\d+)?)\s*%\s*ABV\b/', $text, $m)) {
             return $m[1] . '%';
         }
 
-        // Proof pattern: 80 PROOF = 40%
+        /*
+        * Reverse ABV format:
+        * ABV 40%
+        */
+        if (preg_match('/\bABV\s*(\d+(?:\.\d+)?)\s*%/', $text, $m)) {
+            return $m[1] . '%';
+        }
+
+        /*
+        * Proof pattern:
+        * 80 PROOF = 40%
+        */
         if (preg_match('/(\d+(?:\.\d+)?)\s*PROOF\b/', $text, $m)) {
             $abv = ((float)$m[1]) / 2;
             return rtrim(rtrim((string)$abv, '0'), '.') . '%';
