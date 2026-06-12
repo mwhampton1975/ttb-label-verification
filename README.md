@@ -46,6 +46,71 @@ If country field is populated:
     If found, pass.
     If not found, fail or review depending confidence.
 
+## Architecture Overview
+
+This prototype is organized around two main layers:
+
+### 1. LabelParser
+
+`LabelParser` is responsible for turning OCR text into structured label evidence. It extracts or verifies fields such as brand name, class/type, ABV, net contents, producer/bottler information, country of origin, and the government warning statement.
+
+The parser does not attempt to fully replace legal review. Instead, it creates a structured interpretation of the label by applying normalization, OCR-tolerant matching, and a limited set of prototype compliance rules.
+
+For example, the parser can identify whether the expected brand appears in the OCR text, whether the label includes class/type language compatible with the application data, whether ABV and net contents can be found, whether a country of origin appears for an imported product, and whether the required government warning can be confirmed.
+
+### 2. ApplicationComparator
+
+`ApplicationComparator` takes the structured output from `LabelParser` and compares it against the submitted application data.
+
+This separates field extraction from field evaluation. The parser answers, “What evidence did we find on the label?” The comparator answers, “Does that evidence satisfy the application expectation?”
+
+The comparator produces field-level results using `pass`, `review`, or `fail` statuses. These field results are then combined into an overall rule-based recommendation.
+
+## Two-Phase Verification Model
+
+The application uses a two-phase approach to determine whether a label can pass automated review.
+
+### Phase 1: Evidence Extraction
+
+The OCR output is parsed into structured fields:
+
+* Brand name
+* Class/type designation
+* Alcohol content
+* Net contents
+* Producer/bottler information
+* Country of origin for imports
+* Government warning statement
+
+This phase focuses on locating and normalizing information from the label image.
+
+### Phase 2: Application Comparison and Compliance Evaluation
+
+The parsed evidence is compared against the application data submitted through the form. Each field receives a status:
+
+* `pass` when the label evidence clearly supports the application value
+* `review` when the evidence is partial, ambiguous, or outside the prototype ruleset
+* `fail` when a required field is missing or clearly does not match
+
+This creates two levels of confidence: first, whether the information can be extracted from the image, and second, whether the extracted information satisfies the expected application data and prototype compliance rules.
+
+## Compliance Rule Limitations
+
+The compliance logic in this prototype is intentionally partial. It demonstrates how rules can be represented in code, but it is not a complete or legally validated implementation of TTB class/type standards.
+
+TTB class/type rules can depend on production method, formula, ingredients, flavoring materials, origin, ABV, and other facts that may not be visible on the label image alone. For that reason, this prototype is intentionally conservative. Ambiguous, incomplete, or unsupported results are routed to `review` rather than being automatically approved.
+
+A production version would require a validated rule library, complete class/type coverage, reviewer-approved test cases, audit logging, and ongoing compliance review before it could replace human decision-making.
+
+## Optional LLM Adjudication
+
+The Bedrock LLM layer is optional and disabled unless selected on the form. It does not replace the deterministic rule-based checks. Instead, it can provide an additional explanation for ambiguous or low-confidence cases.
+
+The core workflow remains local OCR, structured parsing, deterministic comparison, and conservative pass/review/fail evaluation.
+
+The deterministic OCR + rules workflow is the primary path and is designed for fast processing. Bedrock adjudication is optional, disabled by default, and only used for ambiguous or low-confidence cases. Because Bedrock adds network and model latency, it is treated as an explanation/review assist layer rather than part of the required fast path.
+
+
 LabelParser:
 Extracts fields and detects whether expected fields appear in OCR.
 

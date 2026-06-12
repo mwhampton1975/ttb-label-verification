@@ -34,6 +34,74 @@ function shouldUseLlm(array $parsed, array $comparison): bool
     return false;
 }
 
+function buildCompactLlmInput(array $expected, array $parsed, array $comparison): array
+{
+    return [
+        'application_data' => [
+            'brand' => $expected['brand'] ?? null,
+            'class_type' => $expected['class_type'] ?? null,
+            'abv' => $expected['abv'] ?? null,
+            'net_contents' => $expected['net_contents'] ?? null,
+            'producer' => $expected['producer'] ?? null,
+            'country' => $expected['country'] ?? null,
+        ],
+
+        'rule_based_result' => [
+            'overall_status' => $comparison['overall_status'] ?? 'review',
+            'fields' => $comparison['fields'] ?? [],
+        ],
+
+        'parser_evidence' => [
+            'brand' => [
+                'matched_text' => $parsed['expected_brand_matched_text'] ?? null,
+                'confidence' => $parsed['expected_brand_confidence'] ?? null,
+                'match_type' => $parsed['expected_brand_match_type'] ?? null,
+            ],
+            'class_type' => [
+                'designation' => $parsed['designation'] ?? null,
+                'matched_text' => $parsed['matched_text'] ?? null,
+                'confidence' => $parsed['classification_confidence'] ?? null,
+                'status' => $parsed['class_type_status'] ?? null,
+                'reason' => $parsed['class_type_reason'] ?? null,
+            ],
+            'abv' => [
+                'found' => $parsed['abv'] ?? null,
+            ],
+            'net_contents' => [
+                'found' => $parsed['net_contents'] ?? null,
+            ],
+            'producer' => [
+                'found' => $parsed['producer_found'] ?? null,
+                'confidence' => $parsed['producer_confidence'] ?? null,
+                'reason' => $parsed['producer_reason'] ?? null,
+            ],
+            'country' => [
+                'found' => $parsed['country_found'] ?? null,
+                'confidence' => $parsed['country_confidence'] ?? null,
+                'reason' => $parsed['country_reason'] ?? null,
+            ],
+            'government_warning' => [
+                'status' => $parsed['warning_status'] ?? null,
+                'exact_found' => $parsed['warning_exact_found'] ?? null,
+                'partial_found' => $parsed['warning_partial_found'] ?? null,
+                'matched_text' => $parsed['warning_matched_text'] ?? null,
+                'confidence' => $parsed['warning_confidence'] ?? null,
+            ],
+            'flags' => $parsed['flags'] ?? [],
+        ],
+
+        'adjudication_rules' => [
+            'Do not invent label text.',
+            'Do not re-run OCR.',
+            'Use the existing field results and parser evidence only.',
+            'If any field is fail, final recommendation should be fail unless the failure is clearly a parser limitation.',
+            'If any field is review and none fail, final recommendation should be review.',
+            'Only return pass when all required fields pass.',
+            'Government warning requires exact confirmation to pass.',
+        ],
+    ];
+}
+
 function statusClass(?string $status): string
 {
     $status = strtolower((string) $status);
@@ -103,32 +171,24 @@ $parsed = $parser->parse($output, $expected);
 $comparator = new ApplicationComparator();
 $comparison = $comparator->compare($expected, $parsed);
 
+
 $llmRequested = !empty($_POST['use_llm']);
 $llmRecommendedByRules = shouldUseLlm($parsed, $comparison);
 $llmExecuted = false;
 $llmResult = null;
 
+$llmDuration = null;
+$llmStartedAt = microtime(true);
 if ($llmRequested && $llmRecommendedByRules) {
     $adjudicator = LlmAdjudicatorFactory::make();
 
-    $llmResult = $adjudicator->adjudicate([
-        'application_data' => $expected,
-        'ocr_text' => $output,
-        'parser_result' => $parsed,
-        'comparison_result' => $comparison,
-        'rules_summary' => [
-            'brand' => 'Brand should match application data after reasonable normalization.',
-            'class_type' => 'Class/type should match or be equivalent to the application designation.',
-            'abv' => 'Compare numeric ABV value only.',
-            'net_contents' => 'Compare normalized volume.',
-            'government_warning' => 'Exact required warning text is required for pass. Partial warning evidence means review.',
-            'do_not_invent' => 'Do not infer missing text unless supported by OCR evidence.'
-        ]
-    ]);
+    $llmResult = $adjudicator->adjudicate(
+        buildCompactLlmInput($expected, $parsed, $comparison)
+    );
 
     $llmExecuted = true;
 }
-
+$llmDuration = microtime(true) - $llmStartedAt;
 
 ?>
 <!DOCTYPE html>
@@ -227,6 +287,9 @@ $llmEnabled = $llmResult['enabled'] ?? null;
             via <?php echo htmlspecialchars((string)$llmProvider); ?>
         <?php endif; ?>
     </div>
+    <?php if ($llmDuration !== null): ?>
+        <p><strong>LLM duration:</strong> <?php echo number_format($llmDuration, 2); ?> seconds</p>
+    <?php endif; ?>
 <?php endif; ?>
 
 <h2>Field Comparison</h2>

@@ -21,10 +21,7 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
         ];
 
         /*
-        * For this Lightsail prototype, credentials may be supplied through
-        * config/local.php, which is gitignored.
-        *
-        * If these are not provided, the AWS SDK will fall back to its normal
+        * If credentials are not provided, the AWS SDK will fall back to its normal
         * credential provider chain: environment variables, shared credentials,
         * IAM role, etc.
         */
@@ -51,7 +48,7 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
 
         $body = [
             'anthropic_version' => 'bedrock-2023-05-31',
-            'max_tokens' => 1200,
+            'max_tokens' => 300,
             'temperature' => 0,
             'messages' => [
                 [
@@ -114,35 +111,32 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
 
     private function buildPrompt(array $input): string
     {
-        $json = json_encode($input, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $json = json_encode($input, JSON_UNESCAPED_SLASHES);
 
         return <<<PROMPT
-You are assisting with alcohol beverage label verification.
+You are reviewing a structured alcohol label verification result.
 
-You are not the final legal authority.
-Use only the provided OCR text, parser output, comparison output, and rules summary.
-Do not invent text that is not present.
-If OCR evidence is unclear, recommend review.
-If the required government warning is not exactly confirmed, do not mark it as pass.
-Partial warning evidence should be review, not pass.
+Use only the provided rule-based field results and parser evidence.
+Do not invent text.
+Do not re-run OCR.
+Do not override exact-match requirements.
+Government warning can pass only if exact_found is true.
 
-Return only valid JSON using this shape:
+Decision rules:
+- If any required field is fail, final_recommendation is fail.
+- If no fields fail but any field is review, final_recommendation is review.
+- If all required fields pass, final_recommendation is pass.
+
+Return only compact valid JSON:
 {
   "final_recommendation": "pass|review|fail",
   "confidence": 0,
   "summary": "",
-  "field_results": {
-    "brand": {"status": "pass|review|fail", "reason": "", "evidence": ""},
-    "class_type": {"status": "pass|review|fail", "reason": "", "evidence": ""},
-    "abv": {"status": "pass|review|fail", "reason": "", "evidence": ""},
-    "net_contents": {"status": "pass|review|fail", "reason": "", "evidence": ""},
-    "government_warning": {"status": "pass|review|fail", "reason": "", "evidence": ""}
-  },
   "human_review_required": true,
   "review_notes": []
 }
 
-Input data:
+Input:
 $json
 PROMPT;
     }
