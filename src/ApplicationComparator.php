@@ -141,8 +141,8 @@ class ApplicationComparator
 
     private function compareAbv(?string $expected, ?string $found): array
     {
-        $expectedValue = $this->extractPercent($expected);
-        $foundValue = $this->extractPercent($found);
+        $expectedValue = $this->parseAbvValue($expected, true);
+        $foundValue = $this->parseAbvValue($found, false);
 
         if ($expectedValue === null) {
             return [
@@ -177,6 +177,43 @@ class ApplicationComparator
             'status' => 'fail',
             'reason' => 'ABV value does not match application data.'
         ];
+    }
+
+    private function parseAbvValue(?string $value, bool $isExpectedInput = false): ?float
+    {
+        if (!$value || trim($value) === '') {
+            return null;
+        }
+
+        $value = strtoupper(trim($value));
+
+        /*
+        * Application/form input:
+        * Allow "45" to mean 45%.
+        */
+        if ($isExpectedInput && preg_match('/^\s*(\d+(?:\.\d+)?)\s*$/', $value, $m)) {
+            return (float) $m[1];
+        }
+
+        /*
+        * Normal ABV formats:
+        * 45%
+        * 45 % ALC/VOL
+        * 45% ALC./VOL.
+        */
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%/', $value, $m)) {
+            return (float) $m[1];
+        }
+
+        /*
+        * Optional: proof conversion if user or OCR provides proof only.
+        * 90 PROOF = 45% ABV
+        */
+        if (preg_match('/(\d+(?:\.\d+)?)\s*PROOF/', $value, $m)) {
+            return ((float) $m[1]) / 2;
+        }
+
+        return null;
     }
 
     private function compareNetContents(?string $expected, ?string $found): array
