@@ -1749,6 +1749,7 @@ class LabelParser {
             'UNITED STATES OF AMERICA' => ['USA', 'U S A', 'US', 'U S', 'UNITED STATES', 'AMERICA'],
             'CANADA' => ['CANADIAN'],
             'MEXICO' => ['MEXICAN'],
+            'ENGLAND' => ['UK', 'U K', 'UNITED KINGDOM', 'GREAT BRITAIN'],
             'UNITED KINGDOM' => ['UK', 'U K', 'GREAT BRITAIN', 'ENGLAND', 'SCOTLAND', 'WALES'],
             'SCOTLAND' => ['SCOTCH', 'UNITED KINGDOM', 'UK', 'U K'],
             'IRELAND' => ['IRISH'],
