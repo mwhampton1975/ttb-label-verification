@@ -251,6 +251,245 @@ class LabelParser {
             ],
             'min_abv' => null,
         ],
+
+        'WINE' => [
+            'display' => 'WINE',
+            'aliases' => [
+                'WINE',
+                'GRAPE WINE',
+            ],
+            'patterns' => [
+                '/\bGRAPE\s+WINE\b/',
+                '/\bWINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'TABLE_WINE' => [
+            'display' => 'TABLE WINE',
+            'aliases' => [
+                'TABLE WINE',
+                'LIGHT WINE',
+            ],
+            'patterns' => [
+                '/\bTABLE\s+WINE\b/',
+                '/\bLIGHT\s+WINE\b/',
+            ],
+            'min_abv' => 7,
+        ],
+
+        'DESSERT_WINE' => [
+            'display' => 'DESSERT WINE',
+            'aliases' => [
+                'DESSERT WINE',
+            ],
+            'patterns' => [
+                '/\bDESSERT\s+WINE\b/',
+            ],
+            'min_abv' => 14,
+        ],
+
+        'RED_WINE' => [
+            'display' => 'RED WINE',
+            'aliases' => [
+                'RED WINE',
+            ],
+            'patterns' => [
+                '/\bRED\s+WINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'WHITE_WINE' => [
+            'display' => 'WHITE WINE',
+            'aliases' => [
+                'WHITE WINE',
+            ],
+            'patterns' => [
+                '/\bWHITE\s+WINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'ROSE_WINE' => [
+            'display' => 'ROSE WINE',
+            'aliases' => [
+                'ROSE WINE',
+                'ROSÉ WINE',
+                'ROSE',
+                'ROSÉ',
+            ],
+            'patterns' => [
+                '/\bROSE\s+WINE\b/',
+                '/\bROSE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PINK_WINE' => [
+            'display' => 'PINK WINE',
+            'aliases' => [
+                'PINK WINE',
+            ],
+            'patterns' => [
+                '/\bPINK\s+WINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'AMBER_WINE' => [
+            'display' => 'AMBER WINE',
+            'aliases' => [
+                'AMBER WINE',
+            ],
+            'patterns' => [
+                '/\bAMBER\s+WINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'SPARKLING_WINE' => [
+            'display' => 'SPARKLING WINE',
+            'aliases' => [
+                'SPARKLING WINE',
+                'CHAMPAGNE',
+                'CRACKLING WINE',
+                'PETILLANT WINE',
+                'FRIZZANTE WINE',
+                'CREMANT WINE',
+                'PERLANT WINE',
+            ],
+            'patterns' => [
+                '/\bSPARKLING\s+WINE\b/',
+                '/\bCHAMPAGNE\b/',
+                '/\bCRACKLING\s+WINE\b/',
+                '/\bPETILLANT\s+WINE\b/',
+                '/\bFRIZZANTE\s+WINE\b/',
+                '/\bCREMANT\s+WINE\b/',
+                '/\bPERLANT\s+WINE\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'MUSCAT_MOSCATO' => [
+            'display' => 'MUSCAT/MOSCATO',
+            'aliases' => [
+                'MUSCAT',
+                'MOSCATO',
+                'MUSCAT/MOSCATO',
+                'MUSCAT MOSCATO',
+            ],
+            'patterns' => [
+                '/\bMUSCAT\b/',
+                '/\bMOSCATO\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'MUSCATEL' => [
+            'display' => 'MUSCATEL',
+            'aliases' => [
+                'MUSCATEL',
+                'LIGHT MUSCATEL',
+            ],
+            'patterns' => [
+                '/\bMUSCATEL\b/',
+                '/\bLIGHT\s+MUSCATEL\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'CHARDONNAY' => [
+            'display' => 'CHARDONNAY',
+            'aliases' => [
+                'CHARDONNAY',
+            ],
+            'patterns' => [
+                '/\bCHARDONNAY\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'CABERNET_SAUVIGNON' => [
+            'display' => 'CABERNET SAUVIGNON',
+            'aliases' => [
+                'CABERNET SAUVIGNON',
+                'CABERNET',
+            ],
+            'patterns' => [
+                '/\bCABERNET\s+SAUVIGNON\b/',
+                '/\bCABERNET\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PINOT_NOIR' => [
+            'display' => 'PINOT NOIR',
+            'aliases' => [
+                'PINOT NOIR',
+            ],
+            'patterns' => [
+                '/\bPINOT\s+NOIR\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'MERLOT' => [
+            'display' => 'MERLOT',
+            'aliases' => [
+                'MERLOT',
+            ],
+            'patterns' => [
+                '/\bMERLOT\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'SAUVIGNON_BLANC' => [
+            'display' => 'SAUVIGNON BLANC',
+            'aliases' => [
+                'SAUVIGNON BLANC',
+            ],
+            'patterns' => [
+                '/\bSAUVIGNON\s+BLANC\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'RIESLING' => [
+            'display' => 'RIESLING',
+            'aliases' => [
+                'RIESLING',
+            ],
+            'patterns' => [
+                '/\bRIESLING\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PINOT_GRIGIO' => [
+            'display' => 'PINOT GRIGIO',
+            'aliases' => [
+                'PINOT GRIGIO',
+                'PINOT GRIS',
+            ],
+            'patterns' => [
+                '/\bPINOT\s+GRIGIO\b/',
+                '/\bPINOT\s+GRIS\b/',
+            ],
+            'min_abv' => null,
+        ],
+
+        'ZINFANDEL' => [
+            'display' => 'ZINFANDEL',
+            'aliases' => [
+                'ZINFANDEL',
+            ],
+            'patterns' => [
+                '/\bZINFANDEL\b/',
+            ],
+            'min_abv' => null,
+        ],
     ];
 
     public function parse($text, array $expected = []) {
@@ -1517,6 +1756,8 @@ class LabelParser {
     private function normalizeClassTypeText(string $text): string
     {
         $text = strtoupper($text);
+
+        $text = str_replace(['É', 'È', 'Ê', 'Ë'], 'E', $text);
 
         $text = str_replace('WHISKEY', 'WHISKY', $text);
         $text = str_replace('CORDIALS', 'CORDIAL', $text);
