@@ -1,4 +1,5 @@
 <?php
+$processStartedAt = microtime(true);
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -189,7 +190,7 @@ if ($llmRequested && $llmRecommendedByRules) {
     $llmExecuted = true;
 }
 $llmDuration = microtime(true) - $llmStartedAt;
-
+$totalDuration = microtime(true) - $processStartedAt;
 ?>
 <!DOCTYPE html>
 <html>
@@ -256,7 +257,7 @@ $llmDuration = microtime(true) - $llmStartedAt;
 <body>
 
 <h1>Alcohol Label Verification Result</h1>
-
+<p><strong>Total processing duration:</strong> <?php echo number_format($totalDuration, 2); ?> seconds</p>
 <div class="status <?php echo htmlspecialchars($comparison['overall_status']); ?>">
     Overall Rule-Based Status:
     <?php echo strtoupper(htmlspecialchars($comparison['overall_status'])); ?>
