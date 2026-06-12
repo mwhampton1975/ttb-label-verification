@@ -503,43 +503,8 @@ $llmEnabled = $llmResult['enabled'] ?? null;
     </tbody>
 </table>
 
-<?php if ($showDebug && $llmExecuted): ?>
-    <h2>LLM Debug</h2>
-
-    <?php if ($llmResult === null): ?>
-        <pre>LLM was recommended, but no LLM result was returned.</pre>
-    <?php else: ?>
-
-        <table>
-            <tbody>
-                <tr>
-                    <th>Enabled</th>
-                    <td><?php echo htmlspecialchars(var_export($llmResult['enabled'] ?? null, true)); ?></td>
-                </tr>
-                <tr>
-                    <th>Provider</th>
-                    <td><?php echo htmlspecialchars((string)($llmResult['provider'] ?? 'unknown')); ?></td>
-                </tr>
-                <tr>
-                    <th>Model</th>
-                    <td><?php echo htmlspecialchars((string)($llmResult['model_id'] ?? $llmResult['model'] ?? '')); ?></td>
-                </tr>
-                <tr>
-                    <th>Final Recommendation</th>
-                    <td>
-                        <strong>
-                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['final_recommendation'] ?? 'not returned'))); ?>
-                        </strong>
-                    </td>
-                </tr>
-                <tr>
-                    <th>Human Review Required</th>
-                    <td><?php echo htmlspecialchars(var_export($llmResult['human_review_required'] ?? null, true)); ?></td>
-                </tr>
-            </tbody>
-        </table>
-
-        <h3>LLM Soft Field Review</h3>
+<?php if ($llmExecuted): ?>
+    <h3>LLM Soft Field Review</h3>
 
         <table>
             <thead>
@@ -582,6 +547,43 @@ $llmEnabled = $llmResult['enabled'] ?? null;
                     </td>
                     <td><?php echo htmlspecialchars((string)($llmResult['producer_confidence'] ?? '')); ?></td>
                     <td><?php echo htmlspecialchars((string)($llmResult['producer_reason'] ?? '')); ?></td>
+                </tr>
+            </tbody>
+        </table>
+<?php endif; ?>
+
+<?php if ($showDebug && $llmExecuted): ?>
+    <h2>LLM Debug</h2>
+
+    <?php if ($llmResult === null): ?>
+        <pre>LLM was recommended, but no LLM result was returned.</pre>
+    <?php else: ?>
+
+        <table>
+            <tbody>
+                <tr>
+                    <th>Enabled</th>
+                    <td><?php echo htmlspecialchars(var_export($llmResult['enabled'] ?? null, true)); ?></td>
+                </tr>
+                <tr>
+                    <th>Provider</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['provider'] ?? 'unknown')); ?></td>
+                </tr>
+                <tr>
+                    <th>Model</th>
+                    <td><?php echo htmlspecialchars((string)($llmResult['model_id'] ?? $llmResult['model'] ?? '')); ?></td>
+                </tr>
+                <tr>
+                    <th>Final Recommendation</th>
+                    <td>
+                        <strong>
+                            <?php echo strtoupper(htmlspecialchars((string)($llmResult['final_recommendation'] ?? 'not returned'))); ?>
+                        </strong>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Human Review Required</th>
+                    <td><?php echo htmlspecialchars(var_export($llmResult['human_review_required'] ?? null, true)); ?></td>
                 </tr>
             </tbody>
         </table>
