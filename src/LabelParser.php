@@ -1525,31 +1525,6 @@ class LabelParser {
         return null;
     }
 
-    private function normalizeClassTypeText(string $text): string
-    {
-        $text = strtoupper($text);
-        $text = str_replace('WHISKEY', 'WHISKY', $text);
-        $text = str_replace('MESCAL', 'MEZCAL', $text);
-        $text = str_replace(['/', '-', ','], ' ', $text);
-        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
-        $text = preg_replace('/\s+/', ' ', $text);
-
-        return trim($text);
-    }
-
-    private function parseAbvPercent(?string $abv): ?float
-    {
-        if (!$abv) {
-            return null;
-        }
-
-        if (preg_match('/(\d+(?:\.\d+)?)\s*%?/', $abv, $m)) {
-            return (float) $m[1];
-        }
-
-        return null;
-    }
-
     private function checkMinimumAbv(array $rule, ?float $abvPercent): array
     {
         if ($abvPercent === null || empty($rule['min_abv'])) {
