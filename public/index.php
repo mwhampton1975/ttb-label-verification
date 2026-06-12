@@ -20,7 +20,7 @@ $samples = [
         'net_contents' => '750 ML',
         'producer' => 'ABC Distillery Frederick, MD',
         'country' => '',
-        'notes' => 'Demonstrates whisky class/type evidence, and government warning validation strictness.',
+        'notes' => 'Demonstrates whisky class/type evidence, and government warning validation strictness with slight OCR misreading.',
     ],
     'stormchaser' => [
         'label' => 'Stormchaser Chardonnay',
@@ -42,7 +42,7 @@ $samples = [
         'net_contents' => '500 ML',
         'producer' => 'MALT & HOP BREWERY HYATTSVILLE, MD',
         'country' => '',
-        'notes' => 'Demonstrates malt beverage class/type alias handling and government warning detection.',
+        'notes' => 'Demonstrates malt beverage class/type alias handling, government warning detection, and white lettering OCR limitations.',
     ],
     'honey_huckleberry_pie' => [
         'label' => 'Honey Huckleberry Pie',
