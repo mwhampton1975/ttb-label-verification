@@ -169,16 +169,13 @@ class LabelParser {
             'display' => 'INDIA PALE ALE',
             'aliases' => [
                 'IPA',
+                'I P A',
                 'I.P.A.',
                 'INDIA PALE ALE',
             ],
             'patterns' => [
-                '/\bI\.?\s*P\.?\s*A\.?\b/',
+                '/\bI\s*P\s*A\b/',
                 '/\bINDIA\s+PALE\s+ALE\b/',
-            ],
-            'compatible_with' => [
-                'ALE',
-                'PALE_ALE',
             ],
             'min_abv' => null,
         ],
@@ -1694,6 +1691,7 @@ class LabelParser {
                         'flags' => [$abvCheck['reason']],
                         'status' => 'fail',
                         'reason' => 'Class/type wording was found, but ABV does not support the expected designation.',
+                        'classification_source' => 'expected_class_type_direct_match_abv_fail',
                     ];
                 }
 
@@ -1706,7 +1704,8 @@ class LabelParser {
                     'needs_review' => false,
                     'flags' => [],
                     'status' => 'pass',
-                    'reason' => 'Application class/type is supported by OCR evidence using the prototype TTB ruleset.',
+                    'reason' => 'Application class/type is supported by equivalent OCR evidence in the prototype ruleset.',
+                    'classification_source' => 'expected_class_type_direct_match',
                 ];
             }
         }
@@ -1792,7 +1791,7 @@ class LabelParser {
                 return $key;
             }
 
-            foreach ($rule['aliases'] as $alias) {
+            foreach (($rule['aliases'] ?? []) as $alias) {
                 if ($normalized === $this->normalizeClassTypeText($alias)) {
                     return $key;
                 }
