@@ -236,6 +236,37 @@ $samples = [
             border: 1px solid #a5d6a7;
             color: #1b5e20;
         }
+        .upload-wrapper {
+            display: block;
+        }
+
+        .sample-preview {
+            display: none;
+            margin-top: 12px;
+            padding: 14px;
+            border: 1px solid #a5d6a7;
+            border-radius: 5px;
+            background: #e8f5e9;
+        }
+
+        .sample-preview img {
+            display: block;
+            max-width: 100%;
+            max-height: 420px;
+            object-fit: contain;
+            margin-top: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        .sample-preview strong {
+            color: #1b5e20;
+        }
+
+        .sample-preview-actions {
+            margin-top: 12px;
+        }
     </style>
 </head>
 <body>
@@ -282,14 +313,26 @@ $samples = [
     <fieldset>
         <legend>Label Image</legend>
 
-        <label>
-            Upload label image
-            <input id="labelUpload" type="file" name="label" accept="image/*,.pdf" required>
-        </label>
+        <div id="uploadWrapper" class="upload-wrapper">
+            <label>
+                Upload label image
+                <input id="labelUpload" type="file" name="label" accept="image/*,.pdf" required>
+            </label>
 
-        <p class="hint">
-            Use a clear label image when possible. OCR quality directly affects the verification result.
-        </p>
+            <p class="hint">
+                Use a clear label image when possible. OCR quality directly affects the verification result.
+            </p>
+        </div>
+
+        <div id="samplePreview" class="sample-preview">
+            <strong>Demo sample selected. No file upload is required.</strong>
+            <p id="samplePreviewText" class="hint" style="margin-top: 8px; margin-bottom: 0;"></p>
+            <img id="samplePreviewImage" src="" alt="Selected demo sample preview">
+
+            <div class="sample-preview-actions">
+                <button type="button" id="clearSampleButton">Use manual upload instead</button>
+            </div>
+        </div>
     </fieldset>
 
     <fieldset>
@@ -382,6 +425,11 @@ const sampleSelector = document.getElementById('sampleSelector');
 const sampleLabelInput = document.getElementById('sample_label');
 const sampleNotes = document.getElementById('sampleNotes');
 const labelUpload = document.getElementById('labelUpload');
+const uploadWrapper = document.getElementById('uploadWrapper');
+const samplePreview = document.getElementById('samplePreview');
+const samplePreviewImage = document.getElementById('samplePreviewImage');
+const samplePreviewText = document.getElementById('samplePreviewText');
+const clearSampleButton = document.getElementById('clearSampleButton');
 
 const fields = {
     brand: document.getElementById('expected_brand'),
@@ -396,13 +444,7 @@ sampleSelector.addEventListener('change', function () {
     const sampleId = sampleSelector.value;
 
     if (!sampleId || !sampleData[sampleId]) {
-        sampleLabelInput.value = '';
-        labelUpload.required = true;
-
-        sampleNotes.style.display = 'none';
-        sampleNotes.classList.remove('sample-active');
-        sampleNotes.textContent = '';
-
+        clearSampleSelection();
         return;
     }
 
@@ -417,12 +459,14 @@ sampleSelector.addEventListener('change', function () {
     fields.producer.value = sample.producer || '';
     fields.country.value = sample.country || '';
 
-    /*
-     * Browser security prevents JavaScript from setting a file input.
-     * The hidden sample_label value tells process.php to use a whitelisted sample file instead.
-     */
     labelUpload.required = false;
     labelUpload.value = '';
+
+    uploadWrapper.style.display = 'none';
+
+    samplePreview.style.display = 'block';
+    samplePreviewImage.src = 'sample-image.php?file=' + encodeURIComponent(sample.image || '');
+    samplePreviewText.textContent = sample.notes || 'This demo sample will be used for verification.';
 
     sampleNotes.style.display = 'block';
     sampleNotes.classList.add('sample-active');
@@ -439,6 +483,28 @@ labelUpload.addEventListener('change', function () {
         sampleNotes.classList.remove('sample-active');
         sampleNotes.textContent = '';
     }
+});
+
+function clearSampleSelection() {
+    sampleSelector.value = '';
+    sampleLabelInput.value = '';
+
+    labelUpload.required = true;
+
+    uploadWrapper.style.display = 'block';
+
+    samplePreview.style.display = 'none';
+    samplePreviewImage.src = '';
+    samplePreviewText.textContent = '';
+
+    sampleNotes.style.display = 'none';
+    sampleNotes.classList.remove('sample-active');
+    sampleNotes.textContent = '';
+}
+
+clearSampleButton.addEventListener('click', function () {
+    clearSampleSelection();
+    labelUpload.focus();
 });
 
 labelForm.addEventListener('submit', function (event) {
