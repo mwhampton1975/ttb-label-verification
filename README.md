@@ -27,6 +27,10 @@ The AI does not replace compliance agents. It explains edge cases and routes the
 LabelParser:
 Extracts fields and detects whether expected fields appear in OCR.
 
+Class/type verification is implemented as a prototype rules lookup, not as a complete legal standards-of-identity engine. The code maps OCR evidence to a limited set of TTB class/type designations and compares those results to the application data using canonical equivalence rules, such as LIQUEUR/CORDIAL, MESCAL/MEZCAL, and WHISKEY/WHISKY.
+
+Because TTB class/type rules are extensive and depend on production method, formula, origin, ABV, ingredients, and other facts not always visible on the label, this prototype intentionally treats uncertain class/type results as Review. A production system would require a validated rule library, test fixtures for each class/type, reviewer-approved edge cases, and audit logging before replacing human review.
+
 ApplicationComparator:
 Compares expected vs parsed and decides field-level pass/fail/review in a cleaner report.
 
