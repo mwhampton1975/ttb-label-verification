@@ -125,45 +125,41 @@ require_once __DIR__ . "/../src/Llm/LlmAdjudicatorFactory.php";
 
     function applyLlmSoftFieldOverrides(array $comparison, array $llmResult): array
     {
-        $allowedFields = ['brand', 'producer'];
-        $overrides = $llmResult['soft_field_overrides'] ?? [];
+        $fieldsToCheck = ['brand', 'producer'];
 
-        foreach ($allowedFields as $field) {
-            if (empty($overrides[$field]['override'])) {
+        foreach ($fieldsToCheck as $field) {
+            $overrideKey = $field . '_override';
+            $statusKey = $field . '_status';
+            $confidenceKey = $field . '_confidence';
+            $reasonKey = $field . '_reason';
+
+            if (empty($llmResult[$overrideKey])) {
                 continue;
-            }
-
-            $newStatus = $overrides[$field]['status'] ?? null;
-            $confidence = (int)($overrides[$field]['confidence'] ?? 0);
-            $reason = $overrides[$field]['reason'] ?? 'LLM soft-field adjudication applied.';
-
-            if (!in_array($newStatus, ['pass', 'review', 'fail'], true)) {
-                continue;
-            }
-
-            /*
-            * Require high confidence to upgrade to pass.
-            */
-            if ($newStatus === 'pass' && $confidence < 90) {
-                $newStatus = 'review';
-                $reason .= ' Confidence was below the pass threshold, so the field remains review.';
             }
 
             if (!isset($comparison['fields'][$field])) {
                 continue;
             }
 
+            $newStatus = $llmResult[$statusKey] ?? null;
+            $confidence = (int)($llmResult[$confidenceKey] ?? 0);
+            $reason = $llmResult[$reasonKey] ?? 'LLM soft-field adjudication applied.';
+
+            if (!in_array($newStatus, ['pass', 'review', 'fail'], true)) {
+                continue;
+            }
+
+            if ($newStatus === 'pass' && $confidence < 90) {
+                $newStatus = 'review';
+                $reason .= ' Confidence was below the pass threshold, so the field remains review.';
+            }
+
             $originalStatus = $comparison['fields'][$field]['status'] ?? 'review';
 
-            /*
-            * Only allow upgrades for soft fields.
-            * fail -> review/pass
-            * review -> pass
-            * pass remains pass
-            */
             $comparison['fields'][$field]['status'] = $newStatus;
             $comparison['fields'][$field]['reason'] =
-                'LLM soft-field review: ' . $reason . ' Original rule-based status was ' . strtoupper($originalStatus) . '.';
+                'LLM soft-field review: ' . $reason .
+                ' Original rule-based status was ' . strtoupper($originalStatus) . '.';
 
             $comparison['fields'][$field]['llm_override_applied'] = true;
             $comparison['fields'][$field]['llm_confidence'] = $confidence;

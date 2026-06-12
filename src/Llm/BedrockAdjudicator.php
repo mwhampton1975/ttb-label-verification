@@ -48,7 +48,7 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
 
         $body = [
             'anthropic_version' => 'bedrock-2023-05-31',
-            'max_tokens' => 300,
+            'max_tokens' => 500,
             'temperature' => 0,
             'messages' => [
                 [
@@ -114,14 +114,15 @@ class BedrockAdjudicator implements LlmAdjudicatorInterface
         $json = json_encode($input, JSON_UNESCAPED_SLASHES);
 
         return <<<PROMPT
+Return raw JSON only. Do not use markdown. Do not use code fences.
+
 You are reviewing OCR-tolerant soft-field failures in an alcohol label verification prototype.
 
 Use only the provided data.
 Do not invent label text.
-Do not re-run OCR.
 Do not make legal conclusions.
 
-You may review only these soft fields:
+You may only review these soft fields:
 - brand
 - producer
 
@@ -132,32 +133,24 @@ You may not upgrade these hard fields:
 - government_warning
 - country
 
-Soft-field upgrade rules:
-- Upgrade a soft field to pass only when the OCR evidence is clearly the same as the expected value despite minor OCR errors.
-- Treat casing, line breaks, stray punctuation, slashes, and random short noise tokens as insignificant.
-- Common OCR spelling errors may be tolerated when the value remains clearly identifiable.
-- Use pass only if similarity is approximately 90% or higher.
-- Use review if the match is plausible but uncertain.
-- Use fail if the OCR evidence does not reasonably support the expected value.
+Soft-field rules:
+- Upgrade to pass only if OCR evidence clearly represents the expected value despite minor OCR errors.
+- Ignore casing, line breaks, stray punctuation, slashes, and random short noise tokens.
+- Use pass only when similarity is about 90% or higher.
+- Use review when plausible but uncertain.
+- Use fail when OCR evidence does not support the expected value.
 
-Return only compact valid JSON:
+Return exactly this JSON shape:
 {
   "final_recommendation": "pass|review|fail",
-  "soft_field_overrides": {
-    "brand": {
-      "override": true,
-      "status": "pass|review|fail",
-      "confidence": 0,
-      "reason": ""
-    },
-    "producer": {
-      "override": true,
-      "status": "pass|review|fail",
-      "confidence": 0,
-      "reason": ""
-    }
-  },
-  "summary": "",
+  "brand_override": false,
+  "brand_status": "pass|review|fail",
+  "brand_confidence": 0,
+  "brand_reason": "",
+  "producer_override": false,
+  "producer_status": "pass|review|fail",
+  "producer_confidence": 0,
+  "producer_reason": "",
   "human_review_required": true
 }
 
@@ -173,6 +166,13 @@ PROMPT;
         if ($text === '') {
             return null;
         }
+
+        /*
+        * Remove markdown fences if the model includes them.
+        */
+        $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+        $text = preg_replace('/\s*```$/', '', $text);
+        $text = trim($text);
 
         $decoded = json_decode($text, true);
 

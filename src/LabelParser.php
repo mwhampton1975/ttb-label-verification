@@ -796,12 +796,126 @@ class LabelParser {
         return null;
     }
 
-    private function findProducerEvidenceWindow(array $lines): ?string
+    private function findProducerEvidenceWindow(array $lines, ?string $expectedProducer = null): ?string
     {
+        $lines = array_values(array_filter($lines, function ($line) {
+            return trim((string)$line) !== '';
+        }));
+
+        if (empty($lines)) {
+            return null;
+        }
+
+        $expectedNorm = $this->normalizeProducerText((string)$expectedProducer);
+        $expectedTokens = $this->importantProducerTokens($expectedNorm);
+
+        $bestWindow = null;
+        $bestScore = 0;
+
+        $count = count($lines);
+
+        for ($start = 0; $start < $count; $start++) {
+            for ($length = 2; $length <= 6; $length++) {
+                if ($start + $length > $count) {
+                    continue;
+                }
+
+                $windowLines = array_slice($lines, $start, $length);
+                $windowText = implode(' ', $windowLines);
+                $windowNorm = $this->normalizeProducerText($windowText);
+
+                $score = $this->scoreProducerEvidenceWindow(
+                    $windowNorm,
+                    $expectedTokens
+                );
+
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $bestWindow = implode("\n", $windowLines);
+                }
+            }
+        }
+
+        /*
+        * If token scoring found something useful, return it.
+        */
+        if ($bestScore >= 25 && $bestWindow !== null) {
+            return $bestWindow;
+        }
+
+        /*
+        * Fallback: look for producer-related label language.
+        */
         $keywords = [
             'PRODUCED',
             'BOTTLED',
             'DISTILLED',
+            'BREWED',
+            'VINTNER',
+            'VINTNERS',
+            'WINERY',
+            'BREWERY',
+            'DISTILLERY',
+            'CELLARS',
+            'ESTATE',
+        ];
+
+        for ($i = 0; $i < $count; $i++) {
+            $lineNorm = $this->normalizeProducerText($lines[$i]);
+
+            foreach ($keywords as $keyword) {
+                if (str_contains($lineNorm, $keyword)) {
+                    $start = max(0, $i - 1);
+                    $length = min($count - $start, 6);
+
+                    return implode("\n", array_slice($lines, $start, $length));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function scoreProducerEvidenceWindow(string $windowNorm, array $expectedTokens): int
+    {
+        if (empty($expectedTokens)) {
+            return 0;
+        }
+
+        $score = 0;
+        $windowTokens = preg_split('/\s+/', $windowNorm);
+
+        foreach ($expectedTokens as $expectedToken) {
+            if (str_contains($windowNorm, $expectedToken)) {
+                $score += 30;
+                continue;
+            }
+
+            foreach ($windowTokens as $windowToken) {
+                if (strlen($expectedToken) < 4 || strlen($windowToken) < 4) {
+                    continue;
+                }
+
+                /*
+                * Allows OCR errors like:
+                * KINGSTON -> KINCSTON
+                * VINTNERS -> VINTNERS
+                */
+                similar_text($expectedToken, $windowToken, $percent);
+
+                if ($percent >= 82) {
+                    $score += 18;
+                    break;
+                }
+            }
+        }
+
+        /*
+        * Give a small boost for producer-context words.
+        */
+        $contextWords = [
+            'PRODUCED',
+            'BOTTLED',
             'VINTNER',
             'VINTNERS',
             'WINERY',
@@ -810,22 +924,13 @@ class LabelParser {
             'CELLARS',
         ];
 
-        $count = count($lines);
-
-        for ($i = 0; $i < $count; $i++) {
-            $lineNorm = $this->normalizeProducerText($lines[$i]);
-
-            foreach ($keywords as $keyword) {
-                if (str_contains($lineNorm, $keyword)) {
-                    $start = max(0, $i - 1);
-                    $end = min($count - 1, $i + 4);
-
-                    return implode("\n", array_slice($lines, $start, $end - $start + 1));
-                }
+        foreach ($contextWords as $word) {
+            if (str_contains($windowNorm, $word)) {
+                $score += 8;
             }
         }
 
-        return null;
+        return $score;
     }
 
     private function normalizeBaseSpirit(string $base): string {
@@ -2135,7 +2240,7 @@ class LabelParser {
     private function verifyProducerAddress(?string $expectedProducer, array $lines): array
     {
         $expectedProducer = trim((string)$expectedProducer);
-        $evidenceWindow = $this->findProducerEvidenceWindow($lines);
+        $evidenceWindow = $this->findProducerEvidenceWindow($lines, $expectedProducer);
 
         if ($expectedProducer === '') {
             return [
