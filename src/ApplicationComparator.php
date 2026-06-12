@@ -131,50 +131,59 @@ class ApplicationComparator
 
     private function compareClassType(?string $expected, array $parsed): array
     {
-        $expectedNorm = $this->normalizeText($expected);
+        $found = $parsed['designation']
+            ?? $parsed['type']
+            ?? $parsed['class']
+            ?? null;
 
-        $candidates = array_filter([
+        if (!$expected) {
+            return [
+                'expected' => null,
+                'found' => $found,
+                'status' => 'review',
+                'reason' => 'Class/type was not provided in application data.'
+            ];
+        }
+
+        if (!$found) {
+            return [
+                'expected' => $expected,
+                'found' => null,
+                'status' => 'fail',
+                'reason' => 'Class/type designation was not detected in OCR.'
+            ];
+        }
+
+        $expectedKey = $this->canonicalClassTypeKey($expected);
+
+        $candidateValues = array_filter([
             $parsed['designation'] ?? null,
             $parsed['type'] ?? null,
             $parsed['class'] ?? null,
             trim(($parsed['class'] ?? '') . ' ' . ($parsed['type'] ?? '')),
         ]);
 
-        foreach ($candidates as $candidate) {
-            $candidateNorm = $this->normalizeText($candidate);
+        foreach ($candidateValues as $candidate) {
+            $candidateKey = $this->canonicalClassTypeKey($candidate);
 
-            if ($expectedNorm && $candidateNorm === $expectedNorm) {
+            if ($expectedKey === $candidateKey) {
                 return [
                     'expected' => $expected,
                     'found' => $candidate,
                     'status' => !empty($parsed['needs_review']) ? 'review' : 'pass',
                     'reason' => !empty($parsed['needs_review'])
-                        ? 'Class/type matched, but parser flagged this designation for review.'
-                        : 'Class/type matches application data.'
+                        ? 'Class/type is compatible after canonical TTB designation normalization, but parser flagged it for review.'
+                        : 'Class/type is compatible after canonical TTB designation normalization.'
                 ];
             }
         }
 
-        // Wine-specific practical fallback.
-        if ($expectedNorm === 'WINE' && ($this->normalizeText($parsed['class'] ?? '') === 'WINE')) {
-            return [
-                'expected' => $expected,
-                'found' => $parsed['designation'] ?? $parsed['type'] ?? $parsed['class'],
-                'status' => 'review',
-                'reason' => 'Wine class was detected, but parser used a generic table wine designation. Human review recommended.'
-            ];
-        }
-
-        $found = trim(($parsed['designation'] ?? '') ?: ($parsed['type'] ?? '') ?: ($parsed['class'] ?? ''));
-
-        $result = $this->compareText($expected, $found, 'Class/type designation');
-
-        if (!empty($parsed['needs_review'])) {
-            $result['status'] = 'review';
-            $result['reason'] .= ' Parser flagged this designation for review.';
-        }
-
-        return $result;
+        return [
+            'expected' => $expected,
+            'found' => $found,
+            'status' => 'fail',
+            'reason' => 'Class/type is not compatible with application data.'
+        ];
     }
 
     private function compareAbv(?string $expected, ?string $found): array
@@ -348,5 +357,42 @@ class ApplicationComparator
             'reason' => 'Government warning was not detected in OCR text.',
             'evidence' => null,
         ];
+    }
+
+    private function canonicalClassTypeKey(?string $value): ?string
+    {
+        if (!$value || trim($value) === '') {
+            return null;
+        }
+
+        $value = strtoupper($value);
+
+        $value = str_replace('WHISKEY', 'WHISKY', $value);
+        $value = str_replace('MESCAL', 'MEZCAL', $value);
+
+        $value = str_replace(['/', '-', ','], ' ', $value);
+        $value = preg_replace('/[^A-Z0-9\s]/', ' ', $value);
+        $value = preg_replace('/\s+/', ' ', $value);
+        $value = trim($value);
+
+        $aliases = [
+            'LIQUEUR' => 'LIQUEUR_CORDIAL',
+            'CORDIAL' => 'LIQUEUR_CORDIAL',
+            'LIQUEUR CORDIAL' => 'LIQUEUR_CORDIAL',
+
+            'MEZCAL' => 'MEZCAL',
+            'MESCAL' => 'MEZCAL',
+
+            'WHISKY' => 'WHISKY',
+            'WHISKEY' => 'WHISKY',
+
+            'RUM' => 'RUM',
+            'GIN' => 'GIN',
+            'VODKA' => 'VODKA',
+            'BRANDY' => 'BRANDY',
+            'TEQUILA' => 'TEQUILA',
+        ];
+
+        return $aliases[$value] ?? str_replace(' ', '_', $value);
     }
 }
