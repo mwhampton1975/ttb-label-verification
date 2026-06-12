@@ -193,6 +193,9 @@ class LabelParser {
             "designation" => null,
             "matched_text" => null,
             "classification_confidence" => 0,
+            "class_type_status" => "review",
+            "class_type_reason" => null,
+            "class_type_source" => null,
 
             "needs_review" => false,
 
@@ -264,6 +267,10 @@ class LabelParser {
         $result["classification_confidence"] = $classResult["confidence"] ?? 0;
         $result["needs_review"] = $classResult["needs_review"] ?? false;
         $result["flags"] = $classResult["flags"] ?? [];
+
+        $result["class_type_status"] = $classResult["status"] ?? "review";
+        $result["class_type_reason"] = $classResult["reason"] ?? null;
+        $result["class_type_source"] = $classResult["classification_source"] ?? null;
 
         $warningLines = array_values(array_filter($lines, function ($line) {
             return trim($line) !== '';

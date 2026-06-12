@@ -134,8 +134,8 @@ class ApplicationComparator
         return [
             'expected' => $expected,
             'found' => $parsed['designation'] ?? $parsed['class'] ?? null,
-            'status' => $parsed['status'] ?? 'review',
-            'reason' => $parsed['reason'] ?? 'Class/type verification completed by parser ruleset.',
+            'status' => $parsed['class_type_status'] ?? 'review',
+            'reason' => $parsed['class_type_reason'] ?? 'Class/type verification completed by parser ruleset.',
         ];
     }
 
