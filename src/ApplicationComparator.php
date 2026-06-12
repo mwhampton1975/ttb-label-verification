@@ -131,58 +131,11 @@ class ApplicationComparator
 
     private function compareClassType(?string $expected, array $parsed): array
     {
-        $found = $parsed['designation']
-            ?? $parsed['type']
-            ?? $parsed['class']
-            ?? null;
-
-        if (!$expected) {
-            return [
-                'expected' => null,
-                'found' => $found,
-                'status' => 'review',
-                'reason' => 'Class/type was not provided in application data.'
-            ];
-        }
-
-        if (!$found) {
-            return [
-                'expected' => $expected,
-                'found' => null,
-                'status' => 'fail',
-                'reason' => 'Class/type designation was not detected in OCR.'
-            ];
-        }
-
-        $expectedKey = $this->canonicalClassTypeKey($expected);
-
-        $candidateValues = array_filter([
-            $parsed['designation'] ?? null,
-            $parsed['type'] ?? null,
-            $parsed['class'] ?? null,
-            trim(($parsed['class'] ?? '') . ' ' . ($parsed['type'] ?? '')),
-        ]);
-
-        foreach ($candidateValues as $candidate) {
-            $candidateKey = $this->canonicalClassTypeKey($candidate);
-
-            if ($expectedKey === $candidateKey) {
-                return [
-                    'expected' => $expected,
-                    'found' => $candidate,
-                    'status' => !empty($parsed['needs_review']) ? 'review' : 'pass',
-                    'reason' => !empty($parsed['needs_review'])
-                        ? 'Class/type is compatible after canonical TTB designation normalization, but parser flagged it for review.'
-                        : 'Class/type is compatible after canonical TTB designation normalization.'
-                ];
-            }
-        }
-
         return [
             'expected' => $expected,
-            'found' => $found,
-            'status' => 'fail',
-            'reason' => 'Class/type is not compatible with application data.'
+            'found' => $parsed['designation'] ?? $parsed['class'] ?? null,
+            'status' => $parsed['status'] ?? 'review',
+            'reason' => $parsed['reason'] ?? 'Class/type verification completed by parser ruleset.',
         ];
     }
 

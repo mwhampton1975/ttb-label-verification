@@ -31,6 +31,8 @@ Class/type verification is implemented as a prototype rules lookup, not as a com
 
 Because TTB class/type rules are extensive and depend on production method, formula, origin, ABV, ingredients, and other facts not always visible on the label, this prototype intentionally treats uncertain class/type results as Review. A production system would require a validated rule library, test fixtures for each class/type, reviewer-approved edge cases, and audit logging before replacing human review.
 
+Only a small prototype subset of TTB class/type rules is implemented. The rules are organized as data so a production version could expand, test, and validate each class/type designation. Because the full standards depend on production method, formula, ingredients, origin, ABV, and other facts not always visible in OCR, unrecognized or ambiguous class/type results are routed to Review.
+
 ApplicationComparator:
 Compares expected vs parsed and decides field-level pass/fail/review in a cleaner report.
 

@@ -110,54 +110,71 @@ class LabelParser {
         ['pattern' => '/\bCR[EÈ]ME\s+DE\s+([A-Z]+)/', 'type' => null],
     ];
 
-    private array $cocktails = [
-        'MARGARITA',
-        'MARTINI',
-        'VODKA MARTINI',
-        'MANHATTAN',
-        'OLD FASHIONED',
-        'SCREWDRIVER',
-        'DAIQUIRI',
-        'BLOODY MARY',
-        'BLACK RUSSIAN',
-        'WHITE RUSSIAN',
-        'TOM COLLINS',
-        'WHISKY SOUR',
-        'MINT JULEP',
-        'MAI TAI',
-        'GIMLET',
-        'COLLINS',
-        'SLOE GIN FIZZ',
-        'WALLBANGER',
-        'GRASSHOPPER',
-        'PINK SQUIRREL',
-    ];
+    private array $classTypeRules = [
+        'LIQUEUR_CORDIAL' => [
+            'display' => 'LIQUEUR/CORDIAL',
+            'aliases' => [
+                'LIQUEUR',
+                'CORDIAL',
+                'LIQUEUR/CORDIAL',
+                'LIQUEUR CORDIAL',
+            ],
+            'patterns' => [
+                '/\bLIQUEUR\b/',
+                '/\bCORDIAL\b/',
+            ],
+            'min_abv' => null,
+        ],
 
-    private array $flavorWords = [
-        'ORANGE',
-        'LEMON',
-        'LIME',
-        'CHERRY',
-        'PEACH',
-        'APPLE',
-        'APRICOT',
-        'COCONUT',
-        'PINEAPPLE',
-        'MANGO',
-        'VANILLA',
-        'CINNAMON',
-        'PEPPERMINT',
-        'CHOCOLATE',
-        'COFFEE',
-        'RASPBERRY',
-        'STRAWBERRY',
-        'BLACKBERRY',
-        'BLUEBERRY',
-        'BUTTERSCOTCH',
-        'HONEY',
-        'MAPLE',
-        'CARAMEL',
-        'MINT',
+        'MEZCAL' => [
+            'display' => 'MESCAL/MEZCAL',
+            'aliases' => [
+                'MESCAL',
+                'MEZCAL',
+                'MESCAL/MEZCAL',
+                'MESCAL MEZCAL',
+            ],
+            'patterns' => [
+                '/\bMESCAL\b/',
+                '/\bMEZCAL\b/',
+            ],
+            'min_abv' => 40,
+        ],
+
+        'RUM' => [
+            'display' => 'RUM',
+            'aliases' => ['RUM'],
+            'patterns' => [
+                '/\bRUM\b/',
+            ],
+            'min_abv' => 40,
+        ],
+
+        'WHISKY' => [
+            'display' => 'WHISKY',
+            'aliases' => [
+                'WHISKY',
+                'WHISKEY',
+            ],
+            'patterns' => [
+                '/\bWHISKY\b/',
+                '/\bWHISKEY\b/',
+            ],
+            'min_abv' => 40,
+        ],
+
+        'STRAIGHT_RYE_WHISKY' => [
+            'display' => 'STRAIGHT RYE WHISKY',
+            'aliases' => [
+                'STRAIGHT RYE WHISKY',
+                'STRAIGHT RYE WHISKEY',
+            ],
+            'patterns' => [
+                '/\bSTRAIGHT\s+RYE\s+WHISKY\b/',
+                '/\bSTRAIGHT\s+RYE\s+WHISKEY\b/',
+            ],
+            'min_abv' => 40,
+        ],
     ];
 
     public function parse($text, array $expected = []) {
@@ -237,7 +254,7 @@ class LabelParser {
                 $result['abv']
             );
         } else {
-            $classResult = $this->inferClassTypeFromLabelOnly($cleanLines);
+            //$classResult = $this->inferClassTypeFromLabelOnly($cleanLines);
         }
 
         $result["class"] = $classResult["class"] ?? null;
@@ -332,286 +349,6 @@ class LabelParser {
         foreach ($lines as $line) {
             if (preg_match('/\b(\d+(?:\.\d+)?)\s*(ML|M L|L|LITER|LITRE|LITERS|LITRES|FL\s*OZ|PINT|PINTS)\b/', $line, $m)) {
                 return trim($m[1] . ' ' . str_replace(' ', '', $m[2]));
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Main classification pipeline.
-     *
-     * Key change from your original:
-     * We do not classify from global keyword presence.
-     * We first identify likely designation candidate lines,
-     * then run exact phrase logic from most specific to least specific.
-     */
-    private function inferClassTypeFromLabelOnly($lines) {
-
-        $candidates = $this->getDesignationCandidates($lines);
-        $candidateText = implode(' ', array_column($candidates, 'line'));
-        $fullText = implode(' ', $lines);
-
-        // 1. Liqueurs first because they contain base spirit words.
-        if ($result = $this->detectLiqueur($candidateText)) {
-            return $result;
-        }
-
-        // 2. Flavored spirits before plain base spirits.
-        if ($result = $this->detectFlavoredSpirit($candidateText)) {
-            return $result;
-        }
-
-        // 3. Recognized cocktails before plain base spirits.
-        if ($result = $this->detectCocktail($candidateText)) {
-            return $result;
-        }
-
-        // 4. Exact designation phrase rules.
-        foreach ($this->ttbDesignationRules as $rule) {
-            foreach ($candidates as $candidate) {
-                if (preg_match($rule['pattern'], $candidate['line'])) {
-                    $confidence = min(100, $rule['score'] + (int) floor($candidate['score'] / 10));
-
-                    return [
-                        'class' => $rule['class'],
-                        'type' => $rule['type'],
-                        'designation' => $rule['type'] ?? $rule['class'],
-                        'matched_text' => $candidate['line'],
-                        'confidence' => $confidence,
-                        'needs_review' => false,
-                        'flags' => [],
-                    ];
-                }
-            }
-        }
-
-        // 5. Distilled spirits specialty clues.
-        // Current eCFR says the statement of composition and distinctive/fanciful name
-        // can serve as the class/type designation for DSS products.
-        if (preg_match('/\b(SPICED|WITH\s+NATURAL\s+FLAVORS|WITH\s+ARTIFICIAL\s+FLAVORS|ARTIFICIAL\s+FLAVOR|DISTILLED\s+SPIRITS\s+SPECIALTY)\b/', $fullText)) {
-            return [
-                'class' => 'DISTILLED SPIRITS SPECIALTY',
-                'type' => null,
-                'designation' => $this->extractStatementOfComposition($fullText),
-                'matched_text' => null,
-                'confidence' => 65,
-                'needs_review' => true,
-                'flags' => ['Possible distilled spirits specialty or statement-of-composition product. Review formula/label statement.'],
-            ];
-        }
-
-        // 6. Beer/wine fallback 
-        if (str_contains($fullText, 'IPA')) {
-            return [
-                'class' => 'MALT BEVERAGE',
-                'type' => 'INDIA PALE ALE',
-                'designation' => 'INDIA PALE ALE',
-                'matched_text' => 'IPA',
-                'confidence' => 75,
-                'needs_review' => true,
-                'flags' => ['Detected malt beverage term in distilled spirits parser.'],
-            ];
-        }
-
-        if (preg_match('/\bALE\b/', $fullText)) {
-            return [
-                'class' => 'MALT BEVERAGE',
-                'type' => 'ALE',
-                'designation' => 'ALE',
-                'matched_text' => 'ALE',
-                'confidence' => 70,
-                'needs_review' => true,
-                'flags' => ['Detected malt beverage term in distilled spirits parser.'],
-            ];
-        }
-
-        if (preg_match('/\bWINE\b/', $fullText)) {
-            return [
-                'class' => 'WINE',
-                'type' => 'TABLE WINE',
-                'designation' => 'TABLE WINE',
-                'matched_text' => 'WINE',
-                'confidence' => 65,
-                'needs_review' => true,
-                'flags' => ['Detected wine term in distilled spirits parser.'],
-            ];
-        }
-
-        return [
-            'class' => null,
-            'type' => null,
-            'designation' => null,
-            'matched_text' => null,
-            'confidence' => 0,
-            'needs_review' => true,
-            'flags' => ['No class/type designation confidently detected.'],
-        ];
-    }
-
-    private function getDesignationCandidates(array $lines): array {
-        $candidates = [];
-
-        foreach ($lines as $i => $line) {
-            $score = 0;
-
-            if (preg_match('/\b(WHISKY|BOURBON|RYE|VODKA|GIN|RUM|TEQUILA|MEZCAL|BRANDY|COGNAC|LIQUEUR|CORDIAL|SCHNAPPS|TRIPLE\s+SEC|CURACAO)\b/', $line)) {
-                $score += 30;
-            }
-
-            if (preg_match('/\b(STRAIGHT|BLENDED|DISTILLED|REDISTILLED|COMPOUNDED|FLAVORED|SPICED|BOTTLED\s+IN\s+BOND|AGED)\b/', $line)) {
-                $score += 15;
-            }
-
-            if (preg_match('/\b(WITH|MADE\s+WITH|NATURAL\s+FLAVOR|NATURAL\s+FLAVORS|ARTIFICIAL\s+FLAVOR|ARTIFICIAL\s+FLAVORS|STATEMENT\s+OF\s+COMPOSITION)\b/', $line)) {
-                $score += 10;
-            }
-
-            // Penalize warning/importer/address/ABV/container lines.
-            if (preg_match('/\b(GOVERNMENT\s+WARNING|SURGEON\s+GENERAL|PREGNANCY|OPERATE\s+MACHINERY|IMPORTED\s+BY|BOTTLED\s+BY|PRODUCED\s+BY|DISTILLED\s+BY|ALC|VOL|ML|PROOF|NET\s+CONTENTS)\b/', $line)) {
-                $score -= 25;
-            }
-
-            // Often near the top or center label, though OCR order is imperfect.
-            if ($i < 12) {
-                $score += 5;
-            }
-
-            // Very long lines are often legal copy.
-            if (strlen($line) > 80) {
-                $score -= 10;
-            }
-
-            if ($score > 0) {
-                $candidates[] = [
-                    'line' => $line,
-                    'index' => $i,
-                    'score' => $score,
-                ];
-            }
-        }
-
-        usort($candidates, fn($a, $b) => $b['score'] <=> $a['score']);
-
-        return $candidates;
-    }
-
-    private function detectLiqueur(string $text): ?array {
-        foreach ($this->ttbLiqueurRules as $rule) {
-            if (preg_match($rule['pattern'], $text, $m)) {
-                $type = $rule['type'];
-
-                if (!$type && str_contains($m[0], 'CREME')) {
-                    $type = trim($m[0]);
-                }
-
-                return [
-                    'class' => 'LIQUEUR/CORDIAL',
-                    'type' => $type,
-                    'designation' => $type,
-                    'matched_text' => trim($m[0]),
-                    'confidence' => 95,
-                    'needs_review' => false,
-                    'flags' => [],
-                ];
-            }
-        }
-
-        // Generic liqueur/cordial catch.
-        if (preg_match('/\b(LIQUEUR|CORDIAL)\b/', $text, $m)) {
-            return [
-                'class' => 'LIQUEUR/CORDIAL',
-                'type' => null,
-                'designation' => $m[1],
-                'matched_text' => $m[1],
-                'confidence' => 70,
-                'needs_review' => true,
-                'flags' => ['Generic liqueur/cordial detected without a specific type.'],
-            ];
-        }
-
-        return null;
-    }
-
-    private function detectFlavoredSpirit(string $text): ?array {
-        $basePattern = '(VODKA|GIN|RUM|WHISKY|BRANDY)';
-        $flavorPattern = implode('|', array_map('preg_quote', $this->flavorWords));
-
-        // Example: ORANGE FLAVORED VODKA
-        if (preg_match('/\b(' . $flavorPattern . ')\s+FLAVORED\s+' . $basePattern . '\b/', $text, $m)) {
-            $flavor = $m[1];
-            $base = $this->normalizeBaseSpirit($m[2]);
-
-            return [
-                'class' => 'FLAVORED ' . $base,
-                'type' => null,
-                'designation' => $flavor . ' FLAVORED ' . $base,
-                'matched_text' => trim($m[0]),
-                'confidence' => 96,
-                'needs_review' => false,
-                'flags' => [],
-            ];
-        }
-
-        // Example: VODKA WITH NATURAL ORANGE FLAVOR
-        if (preg_match('/\b' . $basePattern . '\s+WITH\s+(?:NATURAL\s+)?(' . $flavorPattern . ')\s+FLAVOR(?:S)?\b/', $text, $m)) {
-            $base = $this->normalizeBaseSpirit($m[1]);
-            $flavor = $m[2];
-
-            return [
-                'class' => 'FLAVORED ' . $base,
-                'type' => null,
-                'designation' => $flavor . ' FLAVORED ' . $base,
-                'matched_text' => trim($m[0]),
-                'confidence' => 88,
-                'needs_review' => true,
-                'flags' => ['Detected “with flavor” phrasing. Review whether this should be flavored class/type or distilled spirits specialty statement of composition.'],
-            ];
-        }
-
-        // Example: SPICED RUM, commonly needs statement-of-composition context.
-        if (preg_match('/\bSPICED\s+(RUM|WHISKY|VODKA|BRANDY|GIN)\b/', $text, $m)) {
-            $base = $this->normalizeBaseSpirit($m[1]);
-
-            return [
-                'class' => 'DISTILLED SPIRITS SPECIALTY',
-                'type' => null,
-                'designation' => 'SPICED ' . $base,
-                'matched_text' => trim($m[0]),
-                'confidence' => 80,
-                'needs_review' => true,
-                'flags' => ['Spiced product detected. Verify required statement of composition and formula treatment.'],
-            ];
-        }
-
-        return null;
-    }
-
-    private function detectCocktail(string $text): ?array {
-        foreach ($this->cocktails as $cocktail) {
-            if (preg_match('/\b' . preg_quote($cocktail, '/') . '\b/', $text, $m)) {
-                $designation = $cocktail;
-                $confidence = 75;
-                $needsReview = true;
-                $flags = ['Cocktail name detected. Verify distilled spirits component declaration.'];
-
-                if (preg_match('/\b' . preg_quote($cocktail, '/') . '\s+MADE\s+WITH\s+([A-Z\s]+?)(?:$|\s{2,}|,|\.)/', $text, $madeWith)) {
-                    $component = trim($madeWith[1]);
-                    $designation = $cocktail . ' MADE WITH ' . $component;
-                    $confidence = 90;
-                    $needsReview = false;
-                    $flags = [];
-                }
-
-                return [
-                    'class' => 'RECOGNIZED COCKTAIL',
-                    'type' => $cocktail,
-                    'designation' => $designation,
-                    'matched_text' => trim($m[0]),
-                    'confidence' => $confidence,
-                    'needs_review' => $needsReview,
-                    'flags' => $flags,
-                ];
             }
         }
 
@@ -1351,131 +1088,81 @@ class LabelParser {
     private function verifyExpectedClassType(?string $expectedClassType, array $lines, ?string $abv): array
     {
         if (!$expectedClassType || trim($expectedClassType) === '') {
-            return $this->inferClassTypeFromLabelOnly($lines);
-        }
-
-        $expectedKey = $this->canonicalClassTypeKey($expectedClassType);
-        $observedMatches = $this->scanClassTypeRules($lines);
-
-        foreach ($observedMatches as $match) {
-            $observedKey = $this->canonicalClassTypeKey(
-                $match['type'] ?? $match['class'] ?? $match['designation'] ?? null
-            );
-
-            $observedClassKey = $this->canonicalClassTypeKey($match['class'] ?? null);
-
-            if ($expectedKey === $observedKey || $expectedKey === $observedClassKey) {
-                return [
-                    'class' => $match['class'] ?? null,
-                    'type' => $match['type'] ?? null,
-                    'designation' => $match['designation'] ?? ($match['type'] ?? $match['class'] ?? null),
-                    'matched_text' => $match['matched_text'] ?? null,
-                    'confidence' => $match['score'] ?? 90,
-                    'needs_review' => false,
-                    'flags' => [],
-                    'status' => 'pass',
-                    'reason' => 'Application class/type is compatible with OCR evidence after canonical TTB designation normalization.',
-                    'classification_source' => 'rules_lookup_compatibility',
-                    'expected_class_type' => $expectedClassType,
-                    'expected_key' => $expectedKey,
-                    'observed_key' => $observedKey,
-                    'observed_matches' => $observedMatches,
-                ];
-            }
-        }
-
-        return [
-            'class' => null,
-            'type' => null,
-            'designation' => null,
-            'matched_text' => null,
-            'confidence' => 40,
-            'needs_review' => true,
-            'flags' => ['Expected class/type was not confirmed from OCR using the prototype TTB rule lookup.'],
-            'status' => 'review',
-            'reason' => 'Class/type could not be confidently verified. Human review required.',
-            'classification_source' => 'rules_lookup_no_match',
-            'expected_class_type' => $expectedClassType,
-            'expected_key' => $expectedKey,
-            'observed_matches' => $observedMatches,
-        ];
-    }
-
-    private function resolveExpectedClassType(string $expectedClassType): array
-    {
-        $expectedNorm = $this->normalizeClassTypeText($expectedClassType);
-
-        // 1. Match expected value against exact designation rules.
-        foreach ($this->ttbDesignationRules as $rule) {
-            $ruleClass = $this->normalizeClassTypeText($rule['class'] ?? '');
-            $ruleType = $this->normalizeClassTypeText($rule['type'] ?? '');
-
-            if (
-                $expectedNorm === $ruleType ||
-                $expectedNorm === $ruleClass ||
-                $expectedNorm === trim($ruleClass . ' ' . $ruleType)
-            ) {
-                return [
-                    'class' => $rule['class'],
-                    'type' => $rule['type'],
-                    'designation' => $rule['type'] ?? $rule['class'],
-                    'normalized' => $expectedNorm,
-                    'source' => 'ttbDesignationRules',
-                ];
-            }
-        }
-
-        // 2. Match expected value against liqueur/cordial type rules.
-        foreach ($this->ttbLiqueurRules as $rule) {
-            $ruleType = $this->normalizeClassTypeText($rule['type'] ?? '');
-
-            if ($ruleType !== '' && $expectedNorm === $ruleType) {
-                return [
-                    'class' => 'LIQUEUR/CORDIAL',
-                    'type' => $rule['type'],
-                    'designation' => $rule['type'],
-                    'normalized' => $expectedNorm,
-                    'source' => 'ttbLiqueurRules',
-                ];
-            }
-        }
-
-        // 3. Generic liqueur/cordial expected value.
-        if (
-            str_contains($expectedNorm, 'LIQUEUR') ||
-            str_contains($expectedNorm, 'CORDIAL')
-        ) {
             return [
-                'class' => 'LIQUEUR/CORDIAL',
+                'class' => null,
                 'type' => null,
-                'designation' => 'LIQUEUR/CORDIAL',
-                'normalized' => $expectedNorm,
-                'source' => 'generic_l صiqueur_cordial',
+                'designation' => null,
+                'matched_text' => null,
+                'confidence' => 0,
+                'needs_review' => true,
+                'flags' => ['No class/type was provided in application data.'],
+                'status' => 'review',
+                'reason' => 'Class/type verification requires application data.',
             ];
         }
 
-        // 4. Recognized cocktails.
-        foreach ($this->cocktails as $cocktail) {
-            $cocktailNorm = $this->normalizeClassTypeText($cocktail);
+        $expectedRuleKey = $this->findClassTypeRuleKey($expectedClassType);
 
-            if ($expectedNorm === $cocktailNorm) {
+        if (!$expectedRuleKey) {
+            return [
+                'class' => null,
+                'type' => null,
+                'designation' => null,
+                'matched_text' => null,
+                'confidence' => 0,
+                'needs_review' => true,
+                'flags' => ['Expected class/type is not included in the prototype ruleset.'],
+                'status' => 'review',
+                'reason' => 'Prototype ruleset does not contain this class/type yet.',
+            ];
+        }
+
+        $rule = $this->classTypeRules[$expectedRuleKey];
+        $text = $this->normalizeClassTypeText(implode(' ', $lines));
+        $abvPercent = $this->parseAbvPercent($abv);
+
+        foreach ($rule['patterns'] as $pattern) {
+            if (preg_match($pattern, $text, $m)) {
+                $abvCheck = $this->checkMinimumAbv($rule, $abvPercent);
+
+                if ($abvCheck['status'] === 'fail') {
+                    return [
+                        'class' => $rule['display'],
+                        'type' => null,
+                        'designation' => $rule['display'],
+                        'matched_text' => $m[0],
+                        'confidence' => 70,
+                        'needs_review' => true,
+                        'flags' => [$abvCheck['reason']],
+                        'status' => 'fail',
+                        'reason' => 'Class/type wording was found, but ABV does not support the expected designation.',
+                    ];
+                }
+
                 return [
-                    'class' => 'RECOGNIZED COCKTAILS',
-                    'type' => $cocktail,
-                    'designation' => $cocktail,
-                    'normalized' => $expectedNorm,
-                    'source' => 'cocktails',
+                    'class' => $rule['display'],
+                    'type' => null,
+                    'designation' => $rule['display'],
+                    'matched_text' => $m[0],
+                    'confidence' => 95,
+                    'needs_review' => false,
+                    'flags' => [],
+                    'status' => 'pass',
+                    'reason' => 'Application class/type is supported by OCR evidence using the prototype TTB ruleset.',
                 ];
             }
         }
 
-        // 5. Fallback: preserve the user's expected designation.
         return [
-            'class' => $expectedClassType,
+            'class' => $rule['display'],
             'type' => null,
-            'designation' => $expectedClassType,
-            'normalized' => $expectedNorm,
-            'source' => 'unresolved_expected_value',
+            'designation' => $rule['display'],
+            'matched_text' => null,
+            'confidence' => 40,
+            'needs_review' => true,
+            'flags' => ['Expected class/type was not found in OCR text.'],
+            'status' => 'review',
+            'reason' => 'OCR did not confirm the expected class/type designation.',
         ];
     }
 
@@ -1821,5 +1508,72 @@ class LabelParser {
         ];
 
         return $aliases[$value] ?? str_replace(' ', '_', $value);
+    }
+
+    private function findClassTypeRuleKey(string $value): ?string
+    {
+        $normalized = $this->normalizeClassTypeText($value);
+
+        foreach ($this->classTypeRules as $key => $rule) {
+            foreach ($rule['aliases'] as $alias) {
+                if ($normalized === $this->normalizeClassTypeText($alias)) {
+                    return $key;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeClassTypeText(string $text): string
+    {
+        $text = strtoupper($text);
+        $text = str_replace('WHISKEY', 'WHISKY', $text);
+        $text = str_replace('MESCAL', 'MEZCAL', $text);
+        $text = str_replace(['/', '-', ','], ' ', $text);
+        $text = preg_replace('/[^A-Z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        return trim($text);
+    }
+
+    private function parseAbvPercent(?string $abv): ?float
+    {
+        if (!$abv) {
+            return null;
+        }
+
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%?/', $abv, $m)) {
+            return (float) $m[1];
+        }
+
+        return null;
+    }
+
+    private function checkMinimumAbv(array $rule, ?float $abvPercent): array
+    {
+        if ($abvPercent === null || empty($rule['min_abv'])) {
+            return [
+                'status' => 'pass',
+                'reason' => null,
+            ];
+        }
+
+        if ($abvPercent < $rule['min_abv']) {
+            return [
+                'status' => 'fail',
+                'reason' => sprintf(
+                    '%s requires at least %s%% ABV; detected ABV is %s%%.',
+                    $rule['display'],
+                    $rule['min_abv'],
+                    $abvPercent
+                ),
+            ];
+        }
+
+        return [
+            'status' => 'pass',
+            'reason' => null,
+        ];
     }
 }
