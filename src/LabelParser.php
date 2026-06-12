@@ -115,6 +115,37 @@ class LabelParser {
             'min_abv' => 40,
         ],
 
+        'BEER' => [
+            'display' => 'BEER',
+            'aliases' => [
+                'BEER',
+                'MALT BEVERAGE',
+                'MALT BEVERAGES',
+            ],
+            'patterns' => [
+                '/\bBEER\b/',
+                '/\bMALT\s+BEVERAGE\b/',
+                '/\bMALT\s+BEVERAGES\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
+                'LAGER',
+                'STOUT',
+                'PORTER',
+                'IPA',
+                'INDIA_PALE_ALE',
+                'PILSNER',
+                'WHEAT_BEER',
+                'WHEAT_ALE',
+                'PALE_ALE',
+                'BROWN_ALE',
+                'HONEY_ALE',
+                'RASPBERRY_ALE',
+                'RUSSIAN_IMPERIAL_STOUT',
+            ],
+            'min_abv' => null,
+        ],
+
         'ALE' => [
             'display' => 'ALE',
             'aliases' => [
@@ -123,18 +154,47 @@ class LabelParser {
             'patterns' => [
                 '/\bALE\b/',
             ],
+            'compatible_with' => [
+                'IPA',
+                'INDIA_PALE_ALE',
+                'PALE_ALE',
+                'BROWN_ALE',
+                'HONEY_ALE',
+                'RASPBERRY_ALE',
+            ],
             'min_abv' => null,
         ],
 
-        'BEER' => [
-            'display' => 'BEER',
+        'IPA' => [
+            'display' => 'INDIA PALE ALE',
             'aliases' => [
-                'BEER',
-                'MALT BEVERAGE',
+                'IPA',
+                'I.P.A.',
+                'INDIA PALE ALE',
             ],
             'patterns' => [
-                '/\bBEER\b/',
-                '/\bMALT\s+BEVERAGE\b/',
+                '/\bI\.?\s*P\.?\s*A\.?\b/',
+                '/\bINDIA\s+PALE\s+ALE\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
+                'PALE_ALE',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PALE_ALE' => [
+            'display' => 'PALE ALE',
+            'aliases' => [
+                'PALE ALE',
+            ],
+            'patterns' => [
+                '/\bPALE\s+ALE\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
+                'IPA',
+                'INDIA_PALE_ALE',
             ],
             'min_abv' => null,
         ],
@@ -147,6 +207,27 @@ class LabelParser {
             'patterns' => [
                 '/\bLAGER\b/',
             ],
+            'compatible_with' => [
+                'BEER',
+                'PILSNER',
+            ],
+            'min_abv' => null,
+        ],
+
+        'PILSNER' => [
+            'display' => 'PILSNER',
+            'aliases' => [
+                'PILSNER',
+                'PILSENER',
+            ],
+            'patterns' => [
+                '/\bPILSNER\b/',
+                '/\bPILSENER\b/',
+            ],
+            'compatible_with' => [
+                'BEER',
+                'LAGER',
+            ],
             'min_abv' => null,
         ],
 
@@ -158,6 +239,27 @@ class LabelParser {
             'patterns' => [
                 '/\bSTOUT\b/',
             ],
+            'compatible_with' => [
+                'BEER',
+                'RUSSIAN_IMPERIAL_STOUT',
+            ],
+            'min_abv' => null,
+        ],
+
+        'RUSSIAN_IMPERIAL_STOUT' => [
+            'display' => 'RUSSIAN IMPERIAL STOUT',
+            'aliases' => [
+                'RUSSIAN IMPERIAL STOUT',
+                'IMPERIAL STOUT',
+            ],
+            'patterns' => [
+                '/\bRUSSIAN\s+IMPERIAL\s+STOUT\b/',
+                '/\bIMPERIAL\s+STOUT\b/',
+            ],
+            'compatible_with' => [
+                'STOUT',
+                'BEER',
+            ],
             'min_abv' => null,
         ],
 
@@ -168,6 +270,69 @@ class LabelParser {
             ],
             'patterns' => [
                 '/\bPORTER\b/',
+            ],
+            'compatible_with' => [
+                'BEER',
+            ],
+            'min_abv' => null,
+        ],
+
+        'WHEAT_BEER' => [
+            'display' => 'WHEAT BEER',
+            'aliases' => [
+                'WHEAT BEER',
+            ],
+            'patterns' => [
+                '/\bWHEAT\s+BEER\b/',
+            ],
+            'compatible_with' => [
+                'BEER',
+                'WHEAT_ALE',
+            ],
+            'min_abv' => null,
+        ],
+
+        'WHEAT_ALE' => [
+            'display' => 'WHEAT ALE',
+            'aliases' => [
+                'WHEAT ALE',
+            ],
+            'patterns' => [
+                '/\bWHEAT\s+ALE\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
+                'WHEAT_BEER',
+            ],
+            'min_abv' => null,
+        ],
+
+        'HONEY_ALE' => [
+            'display' => 'HONEY ALE',
+            'aliases' => [
+                'HONEY ALE',
+            ],
+            'patterns' => [
+                '/\bHONEY\s+ALE\b/',
+                '/\bALE\s+WITH\s+HONEY\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
+            ],
+            'min_abv' => null,
+        ],
+
+        'RASPBERRY_ALE' => [
+            'display' => 'RASPBERRY ALE',
+            'aliases' => [
+                'RASPBERRY ALE',
+            ],
+            'patterns' => [
+                '/\bRASPBERRY\s+ALE\b/',
+                '/\bALE\s+WITH\s+RASPBERRY\b/',
+            ],
+            'compatible_with' => [
+                'ALE',
             ],
             'min_abv' => null,
         ],
@@ -1546,6 +1711,33 @@ class LabelParser {
             }
         }
 
+        $compatibleKeys = $rule['compatible_with'] ?? [];
+
+        foreach ($compatibleKeys as $compatibleKey) {
+            if (empty($this->classTypeRules[$compatibleKey])) {
+                continue;
+            }
+
+            $compatibleRule = $this->classTypeRules[$compatibleKey];
+
+            foreach ($compatibleRule['patterns'] as $pattern) {
+                if (preg_match($pattern, $text, $m)) {
+                    return [
+                        'class' => $rule['display'],
+                        'type' => $compatibleRule['display'],
+                        'designation' => $compatibleRule['display'],
+                        'matched_text' => $m[0],
+                        'confidence' => 90,
+                        'needs_review' => false,
+                        'flags' => [],
+                        'status' => 'pass',
+                        'reason' => 'Application class/type is supported by compatible malt beverage designation evidence in OCR text.',
+                        'classification_source' => 'expected_class_type_compatible_ruleset',
+                    ];
+                }
+            }
+        }
+
         return [
             'class' => $rule['display'],
             'type' => null,
@@ -1596,6 +1788,10 @@ class LabelParser {
         $normalized = $this->normalizeClassTypeText($value);
 
         foreach ($this->classTypeRules as $key => $rule) {
+            if ($normalized === $this->normalizeClassTypeText($key)) {
+                return $key;
+            }
+
             foreach ($rule['aliases'] as $alias) {
                 if ($normalized === $this->normalizeClassTypeText($alias)) {
                     return $key;
