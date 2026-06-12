@@ -1676,38 +1676,38 @@ class LabelParser {
         $text = $this->normalizeClassTypeText(implode(' ', $lines));
         $abvPercent = $this->parseAbvPercent($abv);
 
-        foreach ($rule['patterns'] as $pattern) {
-            if (preg_match($pattern, $text, $m)) {
-                $abvCheck = $this->checkMinimumAbv($rule, $abvPercent);
+        $matchedText = $this->matchClassTypeRuleEvidence($rule, $text);
 
-                if ($abvCheck['status'] === 'fail') {
-                    return [
-                        'class' => $rule['display'],
-                        'type' => null,
-                        'designation' => $rule['display'],
-                        'matched_text' => $m[0],
-                        'confidence' => 70,
-                        'needs_review' => true,
-                        'flags' => [$abvCheck['reason']],
-                        'status' => 'fail',
-                        'reason' => 'Class/type wording was found, but ABV does not support the expected designation.',
-                        'classification_source' => 'expected_class_type_direct_match_abv_fail',
-                    ];
-                }
+        if ($matchedText !== null) {
+            $abvCheck = $this->checkMinimumAbv($rule, $abvPercent);
 
+            if ($abvCheck['status'] === 'fail') {
                 return [
                     'class' => $rule['display'],
                     'type' => null,
                     'designation' => $rule['display'],
-                    'matched_text' => $m[0],
-                    'confidence' => 95,
-                    'needs_review' => false,
-                    'flags' => [],
-                    'status' => 'pass',
-                    'reason' => 'Application class/type is supported by equivalent OCR evidence in the prototype ruleset.',
-                    'classification_source' => 'expected_class_type_direct_match',
+                    'matched_text' => $matchedText,
+                    'confidence' => 70,
+                    'needs_review' => true,
+                    'flags' => [$abvCheck['reason']],
+                    'status' => 'fail',
+                    'reason' => 'Class/type wording was found, but ABV does not support the expected designation.',
+                    'classification_source' => 'expected_class_type_direct_match_abv_fail',
                 ];
             }
+
+            return [
+                'class' => $rule['display'],
+                'type' => null,
+                'designation' => $rule['display'],
+                'matched_text' => $matchedText,
+                'confidence' => 95,
+                'needs_review' => false,
+                'flags' => [],
+                'status' => 'pass',
+                'reason' => 'Application class/type is supported by equivalent OCR evidence in the prototype ruleset.',
+                'classification_source' => 'expected_class_type_direct_match',
+            ];
         }
 
         $compatibleKeys = $rule['compatible_with'] ?? [];
@@ -1719,21 +1719,21 @@ class LabelParser {
 
             $compatibleRule = $this->classTypeRules[$compatibleKey];
 
-            foreach ($compatibleRule['patterns'] as $pattern) {
-                if (preg_match($pattern, $text, $m)) {
-                    return [
-                        'class' => $rule['display'],
-                        'type' => $compatibleRule['display'],
-                        'designation' => $compatibleRule['display'],
-                        'matched_text' => $m[0],
-                        'confidence' => 90,
-                        'needs_review' => false,
-                        'flags' => [],
-                        'status' => 'pass',
-                        'reason' => 'Application class/type is supported by compatible malt beverage designation evidence in OCR text.',
-                        'classification_source' => 'expected_class_type_compatible_ruleset',
-                    ];
-                }
+            $compatibleMatchedText = $this->matchClassTypeRuleEvidence($compatibleRule, $text);
+
+            if ($compatibleMatchedText !== null) {
+                return [
+                    'class' => $rule['display'],
+                    'type' => $compatibleRule['display'],
+                    'designation' => $compatibleRule['display'],
+                    'matched_text' => $compatibleMatchedText,
+                    'confidence' => 90,
+                    'needs_review' => false,
+                    'flags' => [],
+                    'status' => 'pass',
+                    'reason' => 'Application class/type is supported by compatible malt beverage designation evidence in OCR text.',
+                    'classification_source' => 'expected_class_type_compatible_ruleset',
+                ];
             }
         }
 
@@ -1795,6 +1795,41 @@ class LabelParser {
                 if ($normalized === $this->normalizeClassTypeText($alias)) {
                     return $key;
                 }
+            }
+        }
+
+        return null;
+    }
+
+    private function matchClassTypeRuleEvidence(array $rule, string $text): ?string
+    {
+        /*
+        * First check explicit regex patterns.
+        */
+        foreach (($rule['patterns'] ?? []) as $pattern) {
+            if (preg_match($pattern, $text, $m)) {
+                return trim($m[0]);
+            }
+        }
+
+        /*
+        * Then check normalized aliases as literal phrases.
+        * This catches equivalent application/OCR values like:
+        * - IPA
+        * - I P A
+        * - INDIA PALE ALE
+        */
+        foreach (($rule['aliases'] ?? []) as $alias) {
+            $aliasNorm = $this->normalizeClassTypeText($alias);
+
+            if ($aliasNorm === '') {
+                continue;
+            }
+
+            $aliasPattern = '/\b' . preg_replace('/\s+/', '\\s+', preg_quote($aliasNorm, '/')) . '\b/';
+
+            if (preg_match($aliasPattern, $text, $m)) {
+                return trim($m[0]);
             }
         }
 
