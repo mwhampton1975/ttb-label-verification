@@ -418,7 +418,7 @@ $samples = [
         </label>
 
         <div class="notice warning">
-            Bedrock adjudication is optional and may add approximately 3 seconds to processing time.
+            Bedrock adjudication is optional and may add approximately 4 seconds to processing time.
             Leave unchecked for the fastest local rule-based verification.
         </div>
     </fieldset>
