@@ -1,5 +1,27 @@
 <?php
 $samples = [
+    '12345_imports_rum_liqueur' => [
+        'label' => '12345 Imports Rum Liqueur',
+        'image' => '12345_rum_liqueur.jpg',
+        'brand' => '12345 Imports',
+        'class_type' => 'LIQUEUR',
+        'abv' => '18',
+        'net_contents' => '200 ML',
+        'producer' => '12345 Imports Miami, FL',
+        'country' => 'Canada',
+        'notes' => 'Demonstrates liqueur class/type evidence, imported-product country handling, and Happy Path testing.',
+    ],
+    'abc_straight_rye_whisky' => [
+        'label' => 'ABC Straight Rye Whisky',
+        'image' => 'abc_whisky.jpg',
+        'brand' => 'ABC Distillery',
+        'class_type' => 'WHISKY',
+        'abv' => '45',
+        'net_contents' => '750 ML',
+        'producer' => 'ABC Distillery Frederick, MD',
+        'country' => '',
+        'notes' => 'Demonstrates whisky class/type evidence, and government warning validation strictness.',
+    ],
     'bombay_sapphire' => [
         'label' => 'Bombay Sapphire Gin',
         'image' => 'bombay_sapphire.jpg',
