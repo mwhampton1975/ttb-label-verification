@@ -135,10 +135,22 @@ class ApplicationComparator
 
     private function compareClassType(?string $expected, array $parsed): array
     {
+        $status = $parsed['class_type_status'] ?? 'review';
+
+        /*
+        * Found should mean OCR evidence, not the canonical mapped rule display.
+        * matched_text is the cleanest proof of what the OCR actually confirmed.
+        */
+        $found = $parsed['matched_text'] ?? null;
+
+        if ($found === null || trim((string)$found) === '') {
+            $found = null;
+        }
+
         return [
             'expected' => $expected,
-            'found' => $parsed['designation'] ?? $parsed['class'] ?? null,
-            'status' => $parsed['class_type_status'] ?? 'review',
+            'found' => $found,
+            'status' => $status,
             'reason' => $parsed['class_type_reason'] ?? 'Class/type verification completed by parser ruleset.',
         ];
     }

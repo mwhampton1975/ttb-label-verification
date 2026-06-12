@@ -593,6 +593,8 @@ class LabelParser {
             "class_type_status" => "review",
             "class_type_reason" => null,
             "class_type_source" => null,
+            "expected_class_type_rule_key" => null,
+            "expected_class_type_display" => null,
 
             "needs_review" => false,
 
@@ -694,9 +696,12 @@ class LabelParser {
         $result["abv"] = $this->extractAbv($cleanLines);
         $result["net_contents"] = $this->extractNetContents($cleanLines);
 
+        $classTypeSearchLines = array_values(array_filter($lines, function ($line) {
+            return trim($line) !== '';
+        }));
         $classResult = $this->verifyExpectedClassType(
             $expected['class_type'],
-            $cleanLines,
+            $classTypeSearchLines,
             $result['abv']
         );
 
@@ -713,6 +718,9 @@ class LabelParser {
         $result["class_type_status"] = $classResult["status"] ?? "review";
         $result["class_type_reason"] = $classResult["reason"] ?? null;
         $result["class_type_source"] = $classResult["classification_source"] ?? null;
+
+        $result["expected_class_type_rule_key"] = $classResult["expected_rule_key"] ?? null;
+        $result["expected_class_type_display"] = $classResult["expected_rule_display"] ?? null;
 
         $warningLines = array_values(array_filter($lines, function ($line) {
             return trim($line) !== '';
@@ -1249,12 +1257,12 @@ class LabelParser {
         // HARD FAILS
         //
 
-        if (
-            empty($result['class']) &&
-            empty($result['type']) &&
-            empty($result['designation'])
-        ) {
+        if (($result['class_type_status'] ?? null) === 'fail') {
             return 'fail';
+        }
+
+        if (($result['class_type_status'] ?? null) === 'review') {
+            $flags[] = 'Class/type designation was not confirmed by OCR.';
         }
 
         //
@@ -1738,15 +1746,20 @@ class LabelParser {
         }
 
         return [
-            'class' => $rule['display'],
+            'class' => null,
             'type' => null,
-            'designation' => $rule['display'],
+            'designation' => null,
             'matched_text' => null,
+
+            'expected_rule_key' => $expectedRuleKey,
+            'expected_rule_display' => $rule['display'],
+
             'confidence' => 40,
             'needs_review' => true,
             'flags' => ['Expected class/type was not found in OCR text.'],
             'status' => 'review',
             'reason' => 'OCR did not confirm the expected class/type designation.',
+            'classification_source' => 'expected_class_type_not_confirmed',
         ];
     }
 
@@ -1804,20 +1817,9 @@ class LabelParser {
     private function matchClassTypeRuleEvidence(array $rule, string $text): ?string
     {
         /*
-        * First check explicit regex patterns.
-        */
-        foreach (($rule['patterns'] ?? []) as $pattern) {
-            if (preg_match($pattern, $text, $m)) {
-                return trim($m[0]);
-            }
-        }
-
-        /*
-        * Then check normalized aliases as literal phrases.
-        * This catches equivalent application/OCR values like:
-        * - IPA
-        * - I P A
-        * - INDIA PALE ALE
+        * Check normalized aliases first.
+        * This lets one rule treat IPA, I P A, I.P.A., and INDIA PALE ALE
+        * as equivalent evidence.
         */
         foreach (($rule['aliases'] ?? []) as $alias) {
             $aliasNorm = $this->normalizeClassTypeText($alias);
@@ -1826,9 +1828,18 @@ class LabelParser {
                 continue;
             }
 
-            $aliasPattern = '/\b' . preg_replace('/\s+/', '\\s+', preg_quote($aliasNorm, '/')) . '\b/';
+            $aliasPattern = '/(^|\s)' . preg_quote($aliasNorm, '/') . '(\s|$)/';
 
             if (preg_match($aliasPattern, $text, $m)) {
+                return trim($aliasNorm);
+            }
+        }
+
+        /*
+        * Then check explicit regex patterns.
+        */
+        foreach (($rule['patterns'] ?? []) as $pattern) {
+            if (preg_match($pattern, $text, $m)) {
                 return trim($m[0]);
             }
         }
