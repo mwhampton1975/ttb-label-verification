@@ -252,6 +252,24 @@ class LabelParser {
         $result["expected_brand_match_type"] = $expectedBrandResult["match_type"];
         $result["expected_brand_matched_text"] = $expectedBrandResult["matched_text"];
 
+        $countrySearchLines = array_values(array_filter($lines, function ($line) {
+            return trim($line) !== '';
+        }));
+        $countryResult = $this->verifyCountryOfOrigin(
+            $expected['country'] ?? null,
+            $countrySearchLines
+        );
+
+        $result["country_status"] = $countryResult["status"];
+        $result["country_expected"] = $countryResult["expected"];
+        $result["country_found"] = $countryResult["found"];
+        $result["country_confidence"] = $countryResult["confidence"];
+        $result["country_reason"] = $countryResult["reason"];
+
+        if (!empty($countryResult["flag"])) {
+            $result["flags"][] = $countryResult["flag"];
+        }
+
         // STEP 2: extract structured fields
         $result["abv"] = $this->extractAbv($cleanLines);
         $result["net_contents"] = $this->extractNetContents($cleanLines);
